@@ -23,10 +23,11 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	bolt "go.etcd.io/bbolt"
+	"go.uber.org/zap/zaptest"
+
 	"go.etcd.io/etcd/server/v3/storage/backend"
 	betesting "go.etcd.io/etcd/server/v3/storage/backend/testing"
 	"go.etcd.io/etcd/server/v3/storage/schema"
-	"go.uber.org/zap/zaptest"
 )
 
 func TestBackendClose(t *testing.T) {
@@ -180,8 +181,8 @@ func TestBackendDefrag(t *testing.T) {
 		t.Errorf("new size = %v, want < %d", nsize, size)
 	}
 	db := backend.DbFromBackendForTest(b)
-	if db.FreelistType != bcfg.BackendFreelistType {
-		t.Errorf("db FreelistType = [%v], want [%v]", db.FreelistType, bcfg.BackendFreelistType)
+	if db.FreelistType() != bcfg.BackendFreelistType {
+		t.Errorf("db FreelistType = [%v], want [%v]", db.FreelistType(), bcfg.BackendFreelistType)
 	}
 
 	// try put more keys after shrink.

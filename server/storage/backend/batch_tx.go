@@ -24,6 +24,8 @@ import (
 	"go.uber.org/zap"
 
 	bolt "go.etcd.io/bbolt"
+
+	"go.etcd.io/etcd/server/v3/interfaces"
 )
 
 type BucketID int
@@ -60,7 +62,7 @@ type BatchTx interface {
 
 type batchTx struct {
 	sync.Mutex
-	tx      *bolt.Tx
+	tx      interfaces.Tx
 	backend *backend
 
 	pending int
@@ -149,6 +151,7 @@ func (t *batchTx) UnsafeSeqPut(bucket Bucket, key []byte, value []byte) {
 
 func (t *batchTx) unsafePut(bucketType Bucket, key []byte, value []byte, seq bool) {
 	bucket := t.tx.Bucket(bucketType.Name())
+
 	if bucket == nil {
 		t.backend.lg.Fatal(
 			"failed to find a bucket",
@@ -159,7 +162,7 @@ func (t *batchTx) unsafePut(bucketType Bucket, key []byte, value []byte, seq boo
 	if seq {
 		// it is useful to increase fill percent when the workloads are mostly append-only.
 		// this can delay the page split and reduce space usage.
-		bucket.FillPercent = 0.9
+		bucket.SetFillPercent(0.9)
 	}
 	if err := bucket.Put(key, value); err != nil {
 		t.backend.lg.Fatal(
@@ -184,7 +187,7 @@ func (t *batchTx) UnsafeRange(bucketType Bucket, key, endKey []byte, limit int64
 	return unsafeRange(bucket.Cursor(), key, endKey, limit)
 }
 
-func unsafeRange(c *bolt.Cursor, key, endKey []byte, limit int64) (keys [][]byte, vs [][]byte) {
+func unsafeRange(c interfaces.Cursor, key, endKey []byte, limit int64) (keys [][]byte, vs [][]byte) {
 	if limit <= 0 {
 		limit = math.MaxInt64
 	}
@@ -232,7 +235,7 @@ func (t *batchTx) UnsafeForEach(bucket Bucket, visitor func(k, v []byte) error) 
 	return unsafeForEach(t.tx, bucket, visitor)
 }
 
-func unsafeForEach(tx *bolt.Tx, bucket Bucket, visitor func(k, v []byte) error) error {
+func unsafeForEach(tx interfaces.Tx, bucket Bucket, visitor func(k, v []byte) error) error {
 	if b := tx.Bucket(bucket.Name()); b != nil {
 		return b.ForEach(visitor)
 	}
@@ -272,9 +275,14 @@ func (t *batchTx) commit(stop bool) {
 		err := t.tx.Commit()
 		// gofail: var afterCommit struct{}
 
-		rebalanceSec.Observe(t.tx.Stats().RebalanceTime.Seconds())
-		spillSec.Observe(t.tx.Stats().SpillTime.Seconds())
-		writeSec.Observe(t.tx.Stats().WriteTime.Seconds())
+		db := t.tx.DB()
+		if db.DBType() == "bolt" {
+			txstats := t.tx.Stats().(bolt.TxStats)
+			rebalanceSec.Observe(txstats.RebalanceTime.Seconds())
+			spillSec.Observe(txstats.SpillTime.Seconds())
+			writeSec.Observe(txstats.WriteTime.Seconds())
+		}
+
 		commitSec.Observe(time.Since(start).Seconds())
 		atomic.AddInt64(&t.backend.commits, 1)
 
@@ -348,7 +356,7 @@ func (t *batchTxBuffered) unsafeCommit(stop bool) {
 	if t.backend.readTx.tx != nil {
 		// wait all store read transactions using the current boltdb tx to finish,
 		// then close the boltdb tx
-		go func(tx *bolt.Tx, wg *sync.WaitGroup) {
+		go func(tx interfaces.Tx, wg *sync.WaitGroup) {
 			wg.Wait()
 			if err := tx.Rollback(); err != nil {
 				t.backend.lg.Fatal("failed to rollback tx", zap.Error(err))

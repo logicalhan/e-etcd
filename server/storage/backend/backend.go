@@ -28,6 +28,9 @@ import (
 	"go.uber.org/zap"
 
 	bolt "go.etcd.io/bbolt"
+
+	"go.etcd.io/etcd/server/v3/databases/bbolt"
+	"go.etcd.io/etcd/server/v3/interfaces"
 )
 
 var (
@@ -43,6 +46,14 @@ var (
 
 	// minSnapshotWarningTimeout is the minimum threshold to trigger a long running snapshot warning.
 	minSnapshotWarningTimeout = 30 * time.Second
+)
+
+type DBType string
+
+var (
+	BoltDB   DBType = "bolt"
+	BadgerDB DBType = "badger"
+	SQLite   DBType = "sqlite"
 )
 
 type Backend interface {
@@ -71,6 +82,8 @@ type Backend interface {
 
 	// SetTxPostLockInsideApplyHook sets a txPostLockInsideApplyHook.
 	SetTxPostLockInsideApplyHook(func())
+
+	DBType() DBType
 }
 
 type Snapshot interface {
@@ -104,8 +117,8 @@ type backend struct {
 	mlock bool
 
 	mu    sync.RWMutex
-	bopts *bolt.Options
-	db    *bolt.DB
+	bopts interfaces.Options
+	db    interfaces.DB
 
 	batchInterval time.Duration
 	batchLimit    int
@@ -127,6 +140,8 @@ type backend struct {
 	txPostLockInsideApplyHook func()
 
 	lg *zap.Logger
+
+	dbType DBType
 }
 
 type BackendConfig struct {
@@ -171,17 +186,16 @@ func NewDefaultBackend(lg *zap.Logger, path string) Backend {
 }
 
 func newBackend(bcfg BackendConfig) *backend {
-	bopts := &bolt.Options{}
-	if boltOpenOptions != nil {
-		*bopts = *boltOpenOptions
+	opts := bbolt.DbOpts{
+		MMapSize:     bcfg.mmapSize(),
+		FreelistType: bcfg.BackendFreelistType,
+		NoSync:       bcfg.UnsafeNoFsync,
+		NoGrowSync:   bcfg.UnsafeNoFsync,
+		Mlock:        bcfg.Mlock,
 	}
-	bopts.InitialMmapSize = bcfg.mmapSize()
-	bopts.FreelistType = bcfg.BackendFreelistType
-	bopts.NoSync = bcfg.UnsafeNoFsync
-	bopts.NoGrowSync = bcfg.UnsafeNoFsync
-	bopts.Mlock = bcfg.Mlock
+	bopts := bbolt.SetOptions(opts)
 
-	db, err := bolt.Open(bcfg.Path, 0600, bopts)
+	db, err := bbolt.Open(bcfg.Path, 0600, bopts)
 	if err != nil {
 		bcfg.Logger.Panic("failed to open database", zap.String("path", bcfg.Path), zap.Error(err))
 	}
@@ -195,6 +209,7 @@ func newBackend(bcfg BackendConfig) *backend {
 		batchInterval: bcfg.BatchInterval,
 		batchLimit:    bcfg.BatchLimit,
 		mlock:         bcfg.Mlock,
+		dbType:        BoltDB,
 
 		readTx: &readTx{
 			baseReadTx: baseReadTx{
@@ -202,7 +217,7 @@ func newBackend(bcfg BackendConfig) *backend {
 					txBuffer:   txBuffer{make(map[BucketID]*bucketBuffer)},
 					bufVersion: 0,
 				},
-				buckets: make(map[BucketID]*bolt.Bucket),
+				buckets: make(map[BucketID]interfaces.Bucket),
 				txWg:    new(sync.WaitGroup),
 				txMu:    new(sync.RWMutex),
 			},
@@ -240,6 +255,10 @@ func (b *backend) SetTxPostLockInsideApplyHook(hook func()) {
 	b.batchTx.lock()
 	defer b.batchTx.Unlock()
 	b.txPostLockInsideApplyHook = hook
+}
+
+func (b *backend) DBType() DBType {
+	return b.dbType
 }
 
 func (b *backend) ReadTx() ReadTx { return b.readTx }
@@ -485,7 +504,7 @@ func (b *backend) defrag() error {
 	// Don't load tmp db into memory regardless of opening options
 	options.Mlock = false
 	tdbp := temp.Name()
-	tmpdb, err := bolt.Open(tdbp, 0600, &options)
+	tmpdb, err := bbolt.Open(tdbp, 0600, &options)
 	if err != nil {
 		return err
 	}
@@ -526,7 +545,7 @@ func (b *backend) defrag() error {
 		b.lg.Fatal("failed to rename tmp database", zap.Error(err))
 	}
 
-	b.db, err = bolt.Open(dbp, 0600, b.bopts)
+	b.db, err = bbolt.Open(dbp, 0600, b.bopts.(*bolt.Options))
 	if err != nil {
 		b.lg.Fatal("failed to open database", zap.String("path", dbp), zap.Error(err))
 	}
@@ -538,7 +557,11 @@ func (b *backend) defrag() error {
 	size := b.readTx.tx.Size()
 	db := b.readTx.tx.DB()
 	atomic.StoreInt64(&b.size, size)
-	atomic.StoreInt64(&b.sizeInUse, size-(int64(db.Stats().FreePageN)*int64(db.Info().PageSize)))
+	if db.DBType() == "bolt" {
+		stats := db.Stats().(bolt.Stats)
+		info := db.Info().(*bolt.Info)
+		atomic.StoreInt64(&b.sizeInUse, size-(int64(stats.FreePageN)*int64(info.PageSize)))
+	}
 
 	took := time.Since(now)
 	defragSec.Observe(took.Seconds())
@@ -560,8 +583,9 @@ func (b *backend) defrag() error {
 	return nil
 }
 
-func defragdb(odb, tmpdb *bolt.DB, limit int) error {
-	// open a tx on tmpdb for writes
+func defragdb(odb, tmpdb interfaces.DB, limit int) error {
+
+	//open a tx on tmpdb for writes
 	tmptx, err := tmpdb.Begin(true)
 	if err != nil {
 		return err
@@ -592,7 +616,7 @@ func defragdb(odb, tmpdb *bolt.DB, limit int) error {
 		if berr != nil {
 			return berr
 		}
-		tmpb.FillPercent = 0.9 // for bucket2seq write in for each
+		tmpb.SetFillPercent(0.9) // for bucket2seq write in for each
 
 		if err = b.ForEach(func(k, v []byte) error {
 			count++
@@ -606,7 +630,7 @@ func defragdb(odb, tmpdb *bolt.DB, limit int) error {
 					return err
 				}
 				tmpb = tmptx.Bucket(next)
-				tmpb.FillPercent = 0.9 // for bucket2seq write in for each
+				tmpb.SetFillPercent(0.9) // for bucket2seq write in for each
 
 				count = 0
 			}
@@ -615,26 +639,27 @@ func defragdb(odb, tmpdb *bolt.DB, limit int) error {
 			return err
 		}
 	}
-
 	return tmptx.Commit()
 }
 
-func (b *backend) begin(write bool) *bolt.Tx {
+func (b *backend) begin(write bool) interfaces.Tx {
 	b.mu.RLock()
 	tx := b.unsafeBegin(write)
 	b.mu.RUnlock()
 
 	size := tx.Size()
 	db := tx.DB()
-	stats := db.Stats()
 	atomic.StoreInt64(&b.size, size)
-	atomic.StoreInt64(&b.sizeInUse, size-(int64(stats.FreePageN)*int64(db.Info().PageSize)))
-	atomic.StoreInt64(&b.openReadTxN, int64(stats.OpenTxN))
-
+	if db.DBType() == "bolt" {
+		stats := db.Stats().(bolt.Stats)
+		info := db.Info().(*bolt.Info)
+		atomic.StoreInt64(&b.sizeInUse, size-(int64(stats.FreePageN)*int64(info.PageSize)))
+		atomic.StoreInt64(&b.openReadTxN, int64(stats.OpenTxN))
+	}
 	return tx
 }
 
-func (b *backend) unsafeBegin(write bool) *bolt.Tx {
+func (b *backend) unsafeBegin(write bool) interfaces.Tx {
 	// gofail: var beforeStartDBTxn struct{}
 	tx, err := b.db.Begin(write)
 	// gofail: var afterStartDBTxn struct{}
@@ -649,7 +674,7 @@ func (b *backend) OpenReadTxN() int64 {
 }
 
 type snapshot struct {
-	*bolt.Tx
+	interfaces.Tx
 	stopc chan struct{}
 	donec chan struct{}
 }
