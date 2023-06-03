@@ -28,7 +28,7 @@ import (
 )
 
 func TestBatchTxPut(t *testing.T) {
-	b, _ := betesting.NewTmpBackend(t, time.Hour, 10000)
+	b, _ := betesting.NewTmpBoltBackend(t, time.Hour, 10000)
 	defer betesting.Close(t, b)
 
 	tx := b.BatchTx()
@@ -57,7 +57,7 @@ func TestBatchTxPut(t *testing.T) {
 }
 
 func TestBatchTxRange(t *testing.T) {
-	b, _ := betesting.NewTmpBackend(t, time.Hour, 10000)
+	b, _ := betesting.NewTmpBoltBackend(t, time.Hour, 10000)
 	defer betesting.Close(t, b)
 
 	tx := b.BatchTx()
@@ -128,7 +128,7 @@ func TestBatchTxRange(t *testing.T) {
 }
 
 func TestBatchTxDelete(t *testing.T) {
-	b, _ := betesting.NewTmpBackend(t, time.Hour, 10000)
+	b, _ := betesting.NewTmpBoltBackend(t, time.Hour, 10000)
 	defer betesting.Close(t, b)
 
 	tx := b.BatchTx()
@@ -154,7 +154,7 @@ func TestBatchTxDelete(t *testing.T) {
 }
 
 func TestBatchTxCommit(t *testing.T) {
-	b, _ := betesting.NewTmpBackend(t, time.Hour, 10000)
+	b, _ := betesting.NewTmpBoltBackend(t, time.Hour, 10000)
 	defer betesting.Close(t, b)
 
 	tx := b.BatchTx()
@@ -200,7 +200,7 @@ func TestBatchTxCommit(t *testing.T) {
 func TestBatchTxBatchLimitCommit(t *testing.T) {
 	// start backend with batch limit 1 so one write can
 	// trigger a commit
-	b, _ := betesting.NewTmpBackend(t, time.Hour, 1)
+	b, _ := betesting.NewTmpBoltBackend(t, time.Hour, 1)
 	defer betesting.Close(t, b)
 
 	tx := b.BatchTx()

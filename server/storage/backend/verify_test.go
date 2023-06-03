@@ -74,7 +74,7 @@ func TestLockVerify(t *testing.T) {
 	for _, tc := range tcs {
 		t.Run(tc.name, func(t *testing.T) {
 
-			be, _ := betesting.NewTmpBackend(t, time.Hour, 10000)
+			be, _ := betesting.NewTmpBoltBackend(t, time.Hour, 10000)
 			be.SetTxPostLockInsideApplyHook(tc.txPostLockInsideApplyHook)
 
 			hasPaniced := handlePanic(func() {

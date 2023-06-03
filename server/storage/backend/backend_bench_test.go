@@ -20,12 +20,42 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+
 	betesting "go.etcd.io/etcd/server/v3/storage/backend/testing"
 	"go.etcd.io/etcd/server/v3/storage/schema"
 )
 
-func BenchmarkBackendPut(b *testing.B) {
-	backend, _ := betesting.NewTmpBackend(b, 100*time.Millisecond, 10000)
+func BenchmarkBoltBackendPut(b *testing.B) {
+	backend, _ := betesting.NewTmpBoltBackend(b, 100*time.Millisecond, 10000)
+	defer betesting.Close(b, backend)
+
+	// prepare keys
+	keys := make([][]byte, b.N)
+	for i := 0; i < b.N; i++ {
+		keys[i] = make([]byte, 64)
+		_, err := rand.Read(keys[i])
+		assert.NoError(b, err)
+	}
+	value := make([]byte, 128)
+	_, err := rand.Read(value)
+	assert.NoError(b, err)
+
+	batchTx := backend.BatchTx()
+
+	batchTx.Lock()
+	batchTx.UnsafeCreateBucket(schema.Test)
+	batchTx.Unlock()
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		batchTx.Lock()
+		batchTx.UnsafePut(schema.Test, keys[i], value)
+		batchTx.Unlock()
+	}
+}
+
+func BenchmarkBadgerBackendPut(b *testing.B) {
+	backend, _ := betesting.NewTmpBadgerBackend(b, 100*time.Millisecond, 10000)
 	defer betesting.Close(b, backend)
 
 	// prepare keys

@@ -98,7 +98,7 @@ func TestGetAllUsers(t *testing.T) {
 	for _, tc := range tcs {
 		t.Run(tc.name, func(t *testing.T) {
 			lg := zaptest.NewLogger(t)
-			be, tmpPath := betesting.NewTmpBackend(t, time.Microsecond, 10)
+			be, tmpPath := betesting.NewTmpBoltBackend(t, time.Microsecond, 10)
 			abe := NewAuthBackend(lg, be)
 			abe.CreateAuthBuckets()
 
@@ -183,7 +183,7 @@ func TestGetUser(t *testing.T) {
 	for _, tc := range tcs {
 		t.Run(tc.name, func(t *testing.T) {
 			lg := zaptest.NewLogger(t)
-			be, tmpPath := betesting.NewTmpBackend(t, time.Microsecond, 10)
+			be, tmpPath := betesting.NewTmpBoltBackend(t, time.Microsecond, 10)
 			abe := NewAuthBackend(lg, be)
 			abe.CreateAuthBuckets()
 

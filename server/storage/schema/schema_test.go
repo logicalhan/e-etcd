@@ -22,6 +22,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/zap"
 
+	"go.etcd.io/raft/v3/raftpb"
+
 	"go.etcd.io/etcd/api/v3/etcdserverpb"
 	"go.etcd.io/etcd/api/v3/membershippb"
 	"go.etcd.io/etcd/api/v3/version"
@@ -29,7 +31,6 @@ import (
 	betesting "go.etcd.io/etcd/server/v3/storage/backend/testing"
 	"go.etcd.io/etcd/server/v3/storage/wal"
 	waltesting "go.etcd.io/etcd/server/v3/storage/wal/testing"
-	"go.etcd.io/raft/v3/raftpb"
 )
 
 func TestValidate(t *testing.T) {
@@ -296,7 +297,7 @@ func TestMigrateIsReversible(t *testing.T) {
 
 func setupBackendData(t *testing.T, ver semver.Version, overrideKeys func(tx backend.BatchTx)) string {
 	t.Helper()
-	be, tmpPath := betesting.NewTmpBackend(t, time.Microsecond, 10)
+	be, tmpPath := betesting.NewTmpBoltBackend(t, time.Microsecond, 10)
 	tx := be.BatchTx()
 	if tx == nil {
 		t.Fatal("batch tx is nil")

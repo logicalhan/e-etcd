@@ -254,8 +254,10 @@ func (t *Tx) Writable() bool {
 }
 
 func (t *Tx) Cursor() interfaces.Cursor {
-	//TODO implement me
-	panic("implement me")
+	if t.bucket == nil {
+		return NewBadgerCursor(t, t.txn.NewIterator(badgerdb.DefaultIteratorOptions), nil)
+	}
+	return NewBadgerCursor(t, t.txn.NewIterator(badgerdb.DefaultIteratorOptions), NewBadgerBucket([]byte(*t.bucket), t))
 }
 
 func (t *Tx) Stats() interface{} {
@@ -332,6 +334,14 @@ type BadgerCursor struct {
 	cursor *badgerdb.Iterator
 	txn    interfaces.Tx
 	bucket interfaces.Bucket
+}
+
+func NewBadgerCursor(txn interfaces.Tx, cursor *badgerdb.Iterator, bucket interfaces.Bucket) interfaces.Cursor {
+	return &BadgerCursor{
+		cursor: cursor,
+		txn:    txn,
+		bucket: bucket,
+	}
 }
 
 func (c *BadgerCursor) Bucket() interfaces.Bucket {

@@ -58,7 +58,7 @@ func TestVersion(t *testing.T) {
 	for _, tc := range tcs {
 		t.Run(tc.version, func(t *testing.T) {
 			lg := zaptest.NewLogger(t)
-			be, tmpPath := betesting.NewTmpBackend(t, time.Microsecond, 10)
+			be, tmpPath := betesting.NewTmpBoltBackend(t, time.Microsecond, 10)
 			tx := be.BatchTx()
 			if tx == nil {
 				t.Fatal("batch tx is nil")
@@ -104,7 +104,7 @@ func TestVersionSnapshot(t *testing.T) {
 	}
 	for _, tc := range tcs {
 		t.Run(tc.version, func(t *testing.T) {
-			be, tmpPath := betesting.NewTmpBackend(t, time.Microsecond, 10)
+			be, tmpPath := betesting.NewTmpBoltBackend(t, time.Microsecond, 10)
 			tx := be.BatchTx()
 			if tx == nil {
 				t.Fatal("batch tx is nil")

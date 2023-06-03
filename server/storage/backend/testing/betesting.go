@@ -37,10 +37,18 @@ func NewTmpBackendFromCfg(t testing.TB, bcfg backend.BackendConfig) (backend.Bac
 	return backend.New(bcfg), tmpPath
 }
 
-// NewTmpBackend creates a backend implementation for testing.
-func NewTmpBackend(t testing.TB, batchInterval time.Duration, batchLimit int) (backend.Backend, string) {
+// NewTmpBoltBackend creates a backend implementation for testing.
+func NewTmpBoltBackend(t testing.TB, batchInterval time.Duration, batchLimit int) (backend.Backend, string) {
 	bcfg := backend.DefaultBackendConfig(zaptest.NewLogger(t))
 	bcfg.BatchInterval, bcfg.BatchLimit = batchInterval, batchLimit
+	return NewTmpBackendFromCfg(t, bcfg)
+}
+
+// NewTmpBadgerBackend creates a backend implementation for testing.
+func NewTmpBadgerBackend(t testing.TB, batchInterval time.Duration, batchLimit int) (backend.Backend, string) {
+	bcfg := backend.DefaultBackendConfig(zaptest.NewLogger(t))
+	bcfg.BatchInterval, bcfg.BatchLimit = batchInterval, batchLimit
+	bcfg.DBType = &backend.BadgerDB
 	return NewTmpBackendFromCfg(t, bcfg)
 }
 

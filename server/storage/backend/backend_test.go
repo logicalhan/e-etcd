@@ -32,7 +32,7 @@ import (
 )
 
 func TestBackendClose(t *testing.T) {
-	b, _ := betesting.NewTmpBackend(t, time.Hour, 10000)
+	b, _ := betesting.NewTmpBoltBackend(t, time.Hour, 10000)
 
 	// check close could work
 	done := make(chan struct{}, 1)
@@ -51,7 +51,7 @@ func TestBackendClose(t *testing.T) {
 }
 
 func TestBackendSnapshot(t *testing.T) {
-	b, _ := betesting.NewTmpBackend(t, time.Hour, 10000)
+	b, _ := betesting.NewTmpBoltBackend(t, time.Hour, 10000)
 	defer betesting.Close(t, b)
 
 	tx := b.BatchTx()
@@ -90,7 +90,7 @@ func TestBackendSnapshot(t *testing.T) {
 func TestBackendBatchIntervalCommit(t *testing.T) {
 	// start backend with super short batch interval so
 	// we do not need to wait long before commit to happen.
-	b, _ := betesting.NewTmpBackend(t, time.Nanosecond, 10000)
+	b, _ := betesting.NewTmpBoltBackend(t, time.Nanosecond, 10000)
 	defer betesting.Close(t, b)
 
 	pc := backend.CommitsForTest(b)
@@ -288,7 +288,7 @@ func TestBackendWriteback(t *testing.T) {
 
 // TestConcurrentReadTx ensures that current read transaction can see all prior writes stored in read buffer
 func TestConcurrentReadTx(t *testing.T) {
-	b, _ := betesting.NewTmpBackend(t, time.Hour, 10000)
+	b, _ := betesting.NewTmpBoltBackend(t, time.Hour, 10000)
 	defer betesting.Close(t, b)
 
 	wtx1 := b.BatchTx()
@@ -318,7 +318,7 @@ func TestConcurrentReadTx(t *testing.T) {
 // TestBackendWritebackForEach checks that partially written / buffered
 // data is visited in the same order as fully committed data.
 func TestBackendWritebackForEach(t *testing.T) {
-	b, _ := betesting.NewTmpBackend(t, time.Hour, 10000)
+	b, _ := betesting.NewTmpBoltBackend(t, time.Hour, 10000)
 	defer betesting.Close(t, b)
 
 	tx := b.BatchTx()

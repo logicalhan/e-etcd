@@ -31,7 +31,7 @@ import (
 // TestConsistentIndex ensures that LoadConsistentIndex/Save/ConsistentIndex and backend.BatchTx can work well together.
 func TestConsistentIndex(t *testing.T) {
 
-	be, tmpPath := betesting.NewTmpBackend(t, time.Microsecond, 10)
+	be, tmpPath := betesting.NewTmpBoltBackend(t, time.Microsecond, 10)
 	ci := NewConsistentIndex(be)
 
 	tx := be.BatchTx()
@@ -99,7 +99,7 @@ func TestConsistentIndexDecrease(t *testing.T) {
 	}
 	for _, tc := range tcs {
 		t.Run(tc.name, func(t *testing.T) {
-			be, tmpPath := betesting.NewTmpBackend(t, time.Microsecond, 10)
+			be, tmpPath := betesting.NewTmpBoltBackend(t, time.Microsecond, 10)
 			tx := be.BatchTx()
 			tx.Lock()
 			schema.UnsafeCreateMetaBucket(tx)

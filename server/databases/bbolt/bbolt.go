@@ -79,22 +79,22 @@ func (b *BBoltDB) Close() error {
 	return b.db.Close()
 }
 
-// no-opt
+// Buckets no-opt
 func (b *BBoltDB) Buckets() []string {
 	return nil
 }
 
-// no-opt
+// DeleteBucket no-opt
 func (b *BBoltDB) DeleteBucket(name []byte) error {
 	return nil
 }
 
-// no-opt
+// HasBucket no-opt
 func (b *BBoltDB) HasBucket(name string) bool {
 	return false
 }
 
-// no-opt
+// CreateBucket no-opt
 func (b *BBoltDB) CreateBucket(name string) {
 	return
 }

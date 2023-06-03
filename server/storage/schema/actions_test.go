@@ -67,7 +67,7 @@ func TestActionIsReversible(t *testing.T) {
 	}
 	for _, tc := range tcs {
 		t.Run(tc.name, func(t *testing.T) {
-			be, _ := betesting.NewTmpBackend(t, time.Microsecond, 10)
+			be, _ := betesting.NewTmpBoltBackend(t, time.Microsecond, 10)
 			defer be.Close()
 			tx := be.BatchTx()
 			if tx == nil {
@@ -124,7 +124,7 @@ func TestActionListRevert(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			lg := zaptest.NewLogger(t)
 
-			be, _ := betesting.NewTmpBackend(t, time.Microsecond, 10)
+			be, _ := betesting.NewTmpBoltBackend(t, time.Microsecond, 10)
 			defer be.Close()
 			tx := be.BatchTx()
 			if tx == nil {

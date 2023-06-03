@@ -165,6 +165,8 @@ type BackendConfig struct {
 	// Mlock prevents backend database file to be swapped
 	Mlock bool
 
+	DBType *DBType
+
 	// Hooks are getting executed during lifecycle of Backend's transactions.
 	Hooks Hooks
 }
@@ -175,10 +177,22 @@ func DefaultBackendConfig(lg *zap.Logger) BackendConfig {
 		BatchLimit:    defaultBatchLimit,
 		MmapSize:      initialMmapSize,
 		Logger:        lg,
+		DBType:        &BoltDB,
 	}
 }
 
 func New(bcfg BackendConfig) Backend {
+	if bcfg.DBType == nil {
+		bcfg.DBType = &BoltDB
+	}
+	switch dbtype := *bcfg.DBType; dbtype {
+	case BadgerDB:
+		db, err := newBadgerBackend(bcfg)
+		if err != nil {
+			panic(err)
+		}
+		return db
+	}
 	return newBackend(bcfg)
 }
 
