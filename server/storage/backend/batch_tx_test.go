@@ -19,7 +19,9 @@ import (
 	"testing"
 	"time"
 
+	badger2 "github.com/dgraph-io/badger/v4"
 	bolt "go.etcd.io/bbolt"
+
 	"go.etcd.io/etcd/server/v3/storage/backend"
 	betesting "go.etcd.io/etcd/server/v3/storage/backend/testing"
 	"go.etcd.io/etcd/server/v3/storage/schema"
@@ -164,18 +166,35 @@ func TestBatchTxCommit(t *testing.T) {
 	tx.Commit()
 
 	// check whether put happens via db view
-	backend.DbFromBackendForTest(b).View(func(tx *bolt.Tx) error {
-		bucket := tx.Bucket(schema.Test.Name())
-		if bucket == nil {
-			t.Errorf("bucket test does not exit")
+	if b.DBType() == "bolt" {
+		backend.DbFromBackendForTest(b).View(func(tx *bolt.Tx) error {
+			bucket := tx.Bucket(schema.Test.Name())
+			if bucket == nil {
+				t.Errorf("bucket test does not exit")
+				return nil
+			}
+			v := bucket.Get([]byte("foo"))
+			if v == nil {
+				t.Errorf("foo key failed to written in backend")
+			}
 			return nil
-		}
-		v := bucket.Get([]byte("foo"))
-		if v == nil {
-			t.Errorf("foo key failed to written in backend")
-		}
-		return nil
-	})
+		})
+	} else if b.DBType() == "badger" {
+		backend.DbFromBackendForTest(b).View(func(tx *badger2.Txn) error {
+			item, err := tx.Get(append(schema.Test.Name(), []byte("/foo")...))
+
+			if err != nil {
+				t.Errorf("foo key failed to written in backend %v", err)
+			}
+			val, err := item.ValueCopy(nil)
+			if err != nil {
+				t.Errorf("foo key failed to written in backend %v", err)
+			}
+			t.Logf("Got value %s", val)
+			return nil
+		})
+	}
+
 }
 
 func TestBatchTxBatchLimitCommit(t *testing.T) {
@@ -192,16 +211,35 @@ func TestBatchTxBatchLimitCommit(t *testing.T) {
 
 	// batch limit commit should have been triggered
 	// check whether put happens via db view
-	backend.DbFromBackendForTest(b).View(func(tx *bolt.Tx) error {
-		bucket := tx.Bucket(schema.Test.Name())
-		if bucket == nil {
-			t.Errorf("bucket test does not exit")
+	if b.DBType() == "bolt" {
+		backend.DbFromBackendForTest(b).View(func(tx *bolt.Tx) error {
+			bucket := tx.Bucket(schema.Test.Name())
+			if bucket == nil {
+				t.Errorf("bucket test does not exit")
+				return nil
+			}
+			v := bucket.Get([]byte("foo"))
+			if v == nil {
+				t.Errorf("foo key failed to written in backend")
+			}
 			return nil
-		}
-		v := bucket.Get([]byte("foo"))
-		if v == nil {
-			t.Errorf("foo key failed to written in backend")
-		}
-		return nil
-	})
+		})
+	} else if b.DBType() == "badger" {
+		backend.DbFromBackendForTest(b).View(func(tx *badger2.Txn) error {
+			item, err := tx.Get(append(schema.Test.Name(), []byte("/foo")...))
+
+			if err != nil {
+				t.Errorf("foo key failed to written in backend %v", err)
+				return err
+			}
+			val, err := item.ValueCopy(nil)
+			if err != nil {
+				t.Errorf("foo key failed to written in backend %v", err)
+				return err
+			}
+			t.Logf("Got value %s", val)
+			return nil
+		})
+	}
+
 }

@@ -24,43 +24,18 @@ import (
 	bolt "go.etcd.io/bbolt"
 )
 
-type BatchTx interface {
-	ReadTx
-	UnsafeCreateBucket(bucket Bucket)
-	UnsafeDeleteBucket(bucket Bucket)
-	UnsafePut(bucket Bucket, key []byte, value []byte)
-	UnsafeSeqPut(bucket Bucket, key []byte, value []byte)
-	UnsafeDelete(bucket Bucket, key []byte)
-	// Commit commits a previous tx and begins a new writable one.
-	Commit()
-	// CommitAndStop commits the previous tx and does not create a new one.
-	CommitAndStop()
-	LockInsideApply()
-	LockOutsideApply()
-}
-
-type ReadTx interface {
-	Lock()
-	Unlock()
-	RLock()
-	RUnlock()
-
-	UnsafeRange(bucket Bucket, key, endKey []byte, limit int64) (keys [][]byte, vals [][]byte)
-	UnsafeForEach(bucket Bucket, visitor func(k, v []byte) error) error
-}
-
-type Options interface {
-}
-
 type DB interface {
 	Path() string
 	GoString() string
+	Buckets() []string
+	HasBucket(name string) bool
+	DeleteBucket(name []byte) error
+	CreateBucket(string)
 	String() string
 	Close() error
 	Begin(writable bool) (Tx, error)
 	Update(fn interface{}) error
 	View(fn interface{}) error
-	Batch(fn interface{}) error
 	Sync() error
 	Stats() interface{}
 	Info() interface{}
@@ -82,7 +57,7 @@ type Tx interface {
 	CreateBucketIfNotExists(name []byte) (Bucket, error)
 	DeleteBucket(name []byte) error
 	ForEach(interface{}) error
-	OnCommit(fn func())
+	OnCommit(interface{})
 	Commit() error
 	Rollback() error
 	Copy(w io.Writer) error

@@ -24,11 +24,13 @@ import (
 	"sync/atomic"
 	"time"
 
+	badgy "github.com/dgraph-io/badger/v4"
 	humanize "github.com/dustin/go-humanize"
 	"go.uber.org/zap"
 
 	bolt "go.etcd.io/bbolt"
 
+	"go.etcd.io/etcd/server/v3/databases/badger"
 	"go.etcd.io/etcd/server/v3/databases/bbolt"
 	"go.etcd.io/etcd/server/v3/interfaces"
 )
@@ -117,7 +119,7 @@ type backend struct {
 	mlock bool
 
 	mu    sync.RWMutex
-	bopts interfaces.Options
+	bopts interface{}
 	db    interfaces.DB
 
 	batchInterval time.Duration
@@ -146,7 +148,8 @@ type backend struct {
 
 type BackendConfig struct {
 	// Path is the file path to the backend file.
-	Path string
+	Path      string
+	ValuePath string
 	// BatchInterval is the maximum time before flushing the BatchTx.
 	BatchInterval time.Duration
 	// BatchLimit is the maximum puts before flushing the BatchTx.
@@ -183,6 +186,58 @@ func NewDefaultBackend(lg *zap.Logger, path string) Backend {
 	bcfg := DefaultBackendConfig(lg)
 	bcfg.Path = path
 	return newBackend(bcfg)
+}
+
+func newBadgerBackend(bcfg BackendConfig) (*backend, error) {
+	opts := badgy.DefaultOptions(bcfg.Path)
+	popts := &opts
+	if bcfg.ValuePath != "" {
+		popts.ValueDir = bcfg.ValuePath
+	}
+
+	bdb, err := badgy.Open(*popts)
+	if err != nil {
+		fmt.Println("han is here", err)
+		return nil, err
+	}
+	db := badger.NewBadgerDB(bdb, bcfg.Path)
+	b := &backend{
+		bopts: nil,
+		db:    db,
+
+		batchInterval: bcfg.BatchInterval,
+		batchLimit:    bcfg.BatchLimit,
+		mlock:         bcfg.Mlock,
+		dbType:        BadgerDB,
+
+		readTx: &readTx{
+			baseReadTx: baseReadTx{
+				buf: txReadBuffer{
+					txBuffer:   txBuffer{make(map[BucketID]*bucketBuffer)},
+					bufVersion: 0,
+				},
+				buckets: make(map[BucketID]interfaces.Bucket),
+				txWg:    new(sync.WaitGroup),
+				txMu:    new(sync.RWMutex),
+			},
+		},
+		txReadBufferCache: txReadBufferCache{
+			mu:         sync.Mutex{},
+			bufVersion: 0,
+			buf:        nil,
+		},
+
+		stopc: make(chan struct{}),
+		donec: make(chan struct{}),
+
+		lg: bcfg.Logger,
+	}
+	b.batchTx = newBatchTxBuffered(b)
+	// We set it after newBatchTxBuffered to skip the 'empty' commit.
+	b.hooks = bcfg.Hooks
+
+	go b.run()
+	return b, nil
 }
 
 func newBackend(bcfg BackendConfig) *backend {
@@ -584,62 +639,67 @@ func (b *backend) defrag() error {
 }
 
 func defragdb(odb, tmpdb interfaces.DB, limit int) error {
-
-	//open a tx on tmpdb for writes
-	tmptx, err := tmpdb.Begin(true)
-	if err != nil {
-		return err
-	}
-	defer func() {
+	if tmpdb.DBType() == "bolt" {
+		//open a tx on tmpdb for writes
+		tmptx, err := tmpdb.Begin(true)
 		if err != nil {
-			tmptx.Rollback()
-		}
-	}()
-
-	// open a tx on old db for read
-	tx, err := odb.Begin(false)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback()
-
-	c := tx.Cursor()
-
-	count := 0
-	for next, _ := c.First(); next != nil; next, _ = c.Next() {
-		b := tx.Bucket(next)
-		if b == nil {
-			return fmt.Errorf("backend: cannot defrag bucket %s", string(next))
-		}
-
-		tmpb, berr := tmptx.CreateBucketIfNotExists(next)
-		if berr != nil {
-			return berr
-		}
-		tmpb.SetFillPercent(0.9) // for bucket2seq write in for each
-
-		if err = b.ForEach(func(k, v []byte) error {
-			count++
-			if count > limit {
-				err = tmptx.Commit()
-				if err != nil {
-					return err
-				}
-				tmptx, err = tmpdb.Begin(true)
-				if err != nil {
-					return err
-				}
-				tmpb = tmptx.Bucket(next)
-				tmpb.SetFillPercent(0.9) // for bucket2seq write in for each
-
-				count = 0
-			}
-			return tmpb.Put(k, v)
-		}); err != nil {
 			return err
 		}
+		defer func() {
+			if err != nil {
+				tmptx.Rollback()
+			}
+		}()
+
+		// open a tx on old db for read
+		tx, err := odb.Begin(false)
+		if err != nil {
+			return err
+		}
+		defer tx.Rollback()
+
+		c := tx.Cursor()
+
+		count := 0
+		for next, _ := c.First(); next != nil; next, _ = c.Next() {
+			b := tx.Bucket(next)
+			if b == nil {
+				return fmt.Errorf("backend: cannot defrag bucket %s", string(next))
+			}
+
+			tmpb, berr := tmptx.CreateBucketIfNotExists(next)
+			if berr != nil {
+				return berr
+			}
+			tmpb.SetFillPercent(0.9) // for bucket2seq write in for each
+
+			if err = b.ForEach(func(k, v []byte) error {
+				count++
+				if count > limit {
+					err = tmptx.Commit()
+					if err != nil {
+						return err
+					}
+					tmptx, err = tmpdb.Begin(true)
+					if err != nil {
+						return err
+					}
+					tmpb = tmptx.Bucket(next)
+					tmpb.SetFillPercent(0.9) // for bucket2seq write in for each
+
+					count = 0
+				}
+				return tmpb.Put(k, v)
+			}); err != nil {
+				return err
+			}
+		}
+		return tmptx.Commit()
+	} else if tmpdb.DBType() == "badger" {
+		// todo(logicalhan) figure this out
+
 	}
-	return tmptx.Commit()
+	return nil
 }
 
 func (b *backend) begin(write bool) interfaces.Tx {

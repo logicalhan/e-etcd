@@ -79,6 +79,26 @@ func (b *BBoltDB) Close() error {
 	return b.db.Close()
 }
 
+// no-opt
+func (b *BBoltDB) Buckets() []string {
+	return nil
+}
+
+// no-opt
+func (b *BBoltDB) DeleteBucket(name []byte) error {
+	return nil
+}
+
+// no-opt
+func (b *BBoltDB) HasBucket(name string) bool {
+	return false
+}
+
+// no-opt
+func (b *BBoltDB) CreateBucket(name string) {
+	return
+}
+
 func (b *BBoltDB) Begin(writable bool) (interfaces.Tx, error) {
 	btx, err := b.db.Begin(writable)
 	if err != nil {
@@ -93,10 +113,6 @@ func (b *BBoltDB) Update(fn interface{}) error {
 
 func (b *BBoltDB) View(fn interface{}) error {
 	return b.db.View(fn.(func(*bolt.Tx) error))
-}
-
-func (b *BBoltDB) Batch(fn interface{}) error {
-	return b.db.Batch(fn.(func(*bolt.Tx) error))
 }
 
 func (b *BBoltDB) Sync() error {
@@ -186,8 +202,8 @@ func (b *BBoltTx) ForEach(fn interface{}) error {
 	return b.tx.ForEach(fn.(func(name []byte, b *bolt.Bucket) error))
 }
 
-func (b *BBoltTx) OnCommit(fn func()) {
-	b.tx.OnCommit(fn)
+func (b *BBoltTx) OnCommit(fn interface{}) {
+	b.tx.OnCommit(fn.(func()))
 }
 
 func (b *BBoltTx) Commit() error {

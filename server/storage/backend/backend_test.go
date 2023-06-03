@@ -21,6 +21,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/dgraph-io/badger/v4"
 	"github.com/stretchr/testify/assert"
 	bolt "go.etcd.io/bbolt"
 	"go.uber.org/zap/zaptest"
@@ -59,7 +60,6 @@ func TestBackendSnapshot(t *testing.T) {
 	tx.UnsafePut(schema.Test, []byte("foo"), []byte("bar"))
 	tx.Unlock()
 	b.ForceCommit()
-
 	// write snapshot to a new file
 	f, err := os.CreateTemp(t.TempDir(), "etcd_backend_test")
 	if err != nil {
@@ -107,20 +107,36 @@ func TestBackendBatchIntervalCommit(t *testing.T) {
 		}
 		time.Sleep(time.Duration(i*100) * time.Millisecond)
 	}
-
-	// check whether put happens via db view
-	assert.NoError(t, backend.DbFromBackendForTest(b).View(func(tx *bolt.Tx) error {
-		bucket := tx.Bucket([]byte("test"))
-		if bucket == nil {
-			t.Errorf("bucket test does not exit")
+	if b.DBType() == "bolt" {
+		// check whether put happens via db view
+		assert.NoError(t, backend.DbFromBackendForTest(b).View(func(tx *bolt.Tx) error {
+			bucket := tx.Bucket([]byte("test"))
+			if bucket == nil {
+				t.Errorf("bucket test does not exit")
+				return nil
+			}
+			v := bucket.Get([]byte("foo"))
+			if v == nil {
+				t.Errorf("foo key failed to written in backend")
+			}
 			return nil
-		}
-		v := bucket.Get([]byte("foo"))
-		if v == nil {
-			t.Errorf("foo key failed to written in backend")
-		}
-		return nil
-	}))
+		}))
+	} else if b.DBType() == "badger" {
+		// check whether put happens via db view
+		assert.NoError(t, backend.DbFromBackendForTest(b).View(func(tx *badger.Txn) error {
+			item, err := tx.Get([]byte("test/foo"))
+			if err != nil {
+				t.Errorf("foo key failed to written in backend %v", err)
+			}
+			val, err := item.ValueCopy(nil)
+			if err != nil {
+				t.Errorf("foo key failed to written in backend %v", err)
+			}
+			println(val)
+			return nil
+		}))
+	}
+
 }
 
 func TestBackendDefrag(t *testing.T) {
