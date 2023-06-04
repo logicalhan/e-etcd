@@ -17,8 +17,8 @@ limitations under the License.
 package badger
 
 import (
-	"bytes"
 	"fmt"
+	"hash/crc32"
 	"io"
 	"os"
 	"sync"
@@ -33,6 +33,8 @@ import (
 
 const (
 	concurrentGoRoutinesForStream = 16
+	bucketPrefix                  = "buckets/"
+	dbPrefix                      = "db/"
 )
 
 var (
@@ -89,6 +91,18 @@ func (b *BadgerDB) Get(key []byte) ([]byte, error) {
 	return valCopy, err
 }
 
+func (b *BadgerDB) GetFromBucket(bucket string, key string) []byte {
+	fullyQualifiedKey := append([]byte(dbPrefix + bucket + "/" + key))
+	println("han", string(fullyQualifiedKey))
+
+	val, _ := b.Get(fullyQualifiedKey)
+	return val
+}
+
+func (b *BadgerDB) Flatten() error {
+	return b.BadgerDB.Flatten(concurrentGoRoutinesForStream)
+}
+
 func (b *BadgerDB) NewStream() *badgerdb.Stream {
 	return b.BadgerDB.NewStream()
 }
@@ -120,12 +134,68 @@ func (b *BadgerDB) GoString() string {
 }
 
 func (b *BadgerDB) Buckets() []string {
-	return b.Buckets()
+	buckets := make([]string, 0)
+	err := b.BadgerDB.View(func(txn *badgerdb.Txn) error {
+		it := txn.NewIterator(badgerdb.DefaultIteratorOptions)
+		defer it.Close()
+		prefix := []byte(bucketPrefix)
+		for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
+			item := it.Item()
+			k := item.Key()
+			key := []byte{}
+			copy(key, k)
+			buckets = append(buckets, string(key[len(bucketPrefix):]))
+			err := item.Value(func(v []byte) error {
+				fmt.Printf("key=%s, value=%s\n", k, v)
+				return nil
+			})
+			if err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return []string{}
+	}
+	return buckets
 }
 
 func (b *BadgerDB) HasBucket(name string) bool {
-	_, ok := b.buckets[name]
+	buckets := b.Buckets()
+	bucketSet := map[string]struct{}{}
+	for _, b := range buckets {
+		bucketSet[b] = struct{}{}
+	}
+	_, ok := bucketSet[name]
 	return ok
+}
+
+func (b *BadgerDB) HashBuckets(ignores func(bucketName, keyName []byte) bool) (uint32, error) {
+	h := crc32.New(crc32.MakeTable(crc32.Castagnoli))
+	buckets := b.Buckets()
+	err := b.BadgerDB.View(func(txn *badgerdb.Txn) error {
+		it := txn.NewIterator(badgerdb.DefaultIteratorOptions)
+		defer it.Close()
+		for _, bucket := range buckets {
+			prefix := []byte(fmt.Sprintf("%s%s", dbPrefix, bucket))
+			for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
+
+				curr := it.Item()
+				if !ignores([]byte(bucket), curr.Key()) {
+					_, err := h.Write(curr.Key())
+					if err != nil {
+						return err
+					}
+				}
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return 0, err
+	}
+	return h.Sum32(), nil
 }
 
 func (b *BadgerDB) DeleteBucket(name []byte) error {
@@ -255,9 +325,9 @@ func (t *Tx) Writable() bool {
 
 func (t *Tx) Cursor() interfaces.Cursor {
 	if t.bucket == nil {
-		return NewBadgerCursor(t, t.txn.NewIterator(badgerdb.DefaultIteratorOptions), nil)
+		return NewBadgerCursor(t, t.txn.NewIterator(badgerdb.DefaultIteratorOptions), nil, "")
 	}
-	return NewBadgerCursor(t, t.txn.NewIterator(badgerdb.DefaultIteratorOptions), NewBadgerBucket([]byte(*t.bucket), t))
+	return NewBadgerCursor(t, t.txn.NewIterator(badgerdb.DefaultIteratorOptions), NewBadgerBucket([]byte(*t.bucket), t, t.db), *t.bucket)
 }
 
 func (t *Tx) Stats() interface{} {
@@ -266,22 +336,22 @@ func (t *Tx) Stats() interface{} {
 }
 
 func (t *Tx) Bucket(name []byte) interfaces.Bucket {
-	return NewBadgerBucket(name, t)
+	return NewBadgerBucket(name, t, t.db)
 }
 
 func (t *Tx) CreateBucket(name []byte) (interfaces.Bucket, error) {
 	if t.bucket == nil {
-		return NewBadgerBucket(name, t), nil
+		return NewBadgerBucket(name, t, t.db), nil
 	} else {
-		return NewBadgerBucket(append([]byte(*t.bucket), name...), t), nil
+		return NewBadgerBucket(append([]byte(*t.bucket), name...), t, t.db), nil
 	}
 }
 
 func (t *Tx) CreateBucketIfNotExists(name []byte) (interfaces.Bucket, error) {
 	if t.bucket == nil {
-		return NewBadgerBucket(name, t), nil
+		return NewBadgerBucket(name, t, t.db), nil
 	} else {
-		return NewBadgerBucket(append([]byte(*t.bucket), name...), t), nil
+		return NewBadgerBucket(append([]byte(*t.bucket), name...), t, t.db), nil
 	}
 }
 
@@ -306,7 +376,6 @@ func (t *Tx) Commit() error {
 }
 
 func (t *Tx) Rollback() error {
-	t.txn.Discard()
 	return nil
 }
 
@@ -334,13 +403,15 @@ type BadgerCursor struct {
 	cursor *badgerdb.Iterator
 	txn    interfaces.Tx
 	bucket interfaces.Bucket
+	prefix string
 }
 
-func NewBadgerCursor(txn interfaces.Tx, cursor *badgerdb.Iterator, bucket interfaces.Bucket) interfaces.Cursor {
+func NewBadgerCursor(txn interfaces.Tx, cursor *badgerdb.Iterator, bucket interfaces.Bucket, prefix string) interfaces.Cursor {
 	return &BadgerCursor{
 		cursor: cursor,
 		txn:    txn,
 		bucket: bucket,
+		prefix: prefix,
 	}
 }
 
@@ -349,56 +420,24 @@ func (c *BadgerCursor) Bucket() interfaces.Bucket {
 }
 
 func (c *BadgerCursor) First() ([]byte, []byte) {
-	item := c.cursor.Item()
-	return getKeyValue(item)
-}
-
-func getKeyValue(item *badgerdb.Item) ([]byte, []byte) {
-	if item != nil {
-		var value []byte
-		if _, err := item.ValueCopy(value); err != nil {
-
-		}
-		key := item.Key()
-		return key, value
-	}
-	return nil, nil
+	panic("todo implement me")
 }
 
 func (c *BadgerCursor) Last() (key []byte, value []byte) {
-	curr := c.cursor.Item()
-	if curr == nil {
-		return nil, nil
-	}
-	counter := 0
-	for c.cursor.Valid() {
-		c.cursor.Next()
-		counter++
-		nxt := c.cursor.Item()
-		if nxt != nil {
-			curr = nxt
-		}
-	}
-	for counter > 0 {
-		c.cursor.Rewind()
-		counter--
-	}
-	return getKeyValue(curr)
+	panic("todo implement me")
 }
 
 func (c *BadgerCursor) Next() (key []byte, value []byte) {
-	c.cursor.Next()
-	return getKeyValue(c.cursor.Item())
+	panic("todo implement me")
 }
 
 func (c *BadgerCursor) Prev() (key []byte, value []byte) {
-	c.cursor.Rewind()
-	return getKeyValue(c.cursor.Item())
+	panic("todo implement me")
 }
 
 func (c *BadgerCursor) Seek(seek []byte) (key []byte, value []byte) {
-	c.cursor.Seek(seek)
-	return getKeyValue(c.cursor.Item())
+	panic("todo implement me")
+
 }
 
 func (c *BadgerCursor) Delete() error {
@@ -409,15 +448,17 @@ func (c *BadgerCursor) Delete() error {
 type BadgerBucket struct {
 	bucketPrefix []byte
 	txn          interfaces.Tx
+	db           BadgerSuperSetDB
 }
 
-func NewBadgerBucket(prefix []byte, txn interfaces.Tx) interfaces.Bucket {
+func NewBadgerBucket(prefix []byte, txn interfaces.Tx, db BadgerSuperSetDB) interfaces.Bucket {
 	if txn == nil {
 		return nil
 	}
 	return &BadgerBucket{
-		bucketPrefix: []byte(string(prefix) + "/"),
+		bucketPrefix: []byte(dbPrefix + string(prefix) + "/"),
 		txn:          txn,
+		db:           db,
 	}
 }
 
@@ -435,53 +476,25 @@ func (b *BadgerBucket) Writable() bool {
 }
 
 func (b *BadgerBucket) Cursor() interfaces.Cursor {
-	curs := b.txn.Cursor()
-	curs.Seek(b.bucketPrefix)
-	return curs
-}
-
-func (b *BadgerBucket) Bucket(name []byte) interfaces.Bucket {
-	prefix := string(b.bucketPrefix)
-	prefix = prefix + string(name)
-	b.Tx().DB().CreateBucket(prefix)
-	return NewBadgerBucket([]byte(prefix), b.txn)
-}
-
-func (b *BadgerBucket) CreateBucket(key []byte) (interfaces.Bucket, error) {
-	prefix := string(b.bucketPrefix) + string(key)
-	b.Tx().DB().CreateBucket(prefix)
-	return NewBadgerBucket([]byte(prefix), b.txn), nil
-}
-
-func (b *BadgerBucket) CreateBucketIfNotExists(key []byte) (interfaces.Bucket, error) {
-	prefix := string(b.bucketPrefix) + string(key)
-	if b.Tx().DB().HasBucket(prefix) {
-		return nil, interfaces.ErrBucketExists
-	}
-	return b.Bucket(key), nil
-}
-
-func (b *BadgerBucket) DeleteBucket(key []byte) error {
-	prefix := append(b.bucketPrefix, key...)
-	return b.Tx().DB().DeleteBucket(prefix)
+	return b.txn.Cursor()
 }
 
 func (b *BadgerBucket) Get(key []byte) []byte {
-	k, v := b.Tx().Cursor().Seek(key)
-	if bytes.Equal(k, key) {
-		return v
+	val, err := b.db.Get(append(b.bucketPrefix, key...))
+	if err != nil {
+		return nil
 	}
-	return nil
+	return val
 }
 
 func (b *BadgerBucket) Put(key []byte, value []byte) error {
-	fullKey := append(b.bucketPrefix, key...)
-	return b.Tx().DB().(BadgerSuperSetDB).Put(fullKey, value)
+	fullyQualifiedKey := append(b.bucketPrefix, key...)
+	println("han put", string(fullyQualifiedKey))
+	return b.db.Put(fullyQualifiedKey, value)
 }
 
 func (b *BadgerBucket) Delete(key []byte) error {
-	fullKey := append(b.bucketPrefix, key...)
-	return b.Tx().DB().(BadgerSuperSetDB).Delete(fullKey)
+	return b.db.Delete(append(b.bucketPrefix, key...))
 }
 
 func (b *BadgerBucket) Sequence() uint64 {

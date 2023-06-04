@@ -17,6 +17,8 @@ limitations under the License.
 package bbolt
 
 import (
+	"fmt"
+	"hash/crc32"
 	"io"
 	"os"
 
@@ -75,6 +77,10 @@ func (b *BBoltDB) String() string {
 	return b.db.String()
 }
 
+func (b *BBoltDB) Flatten() error {
+	panic("not implemented for bolt")
+}
+
 func (b *BBoltDB) Close() error {
 	return b.db.Close()
 }
@@ -105,6 +111,50 @@ func (b *BBoltDB) Begin(writable bool) (interfaces.Tx, error) {
 		return nil, err
 	}
 	return &BBoltTx{tx: btx}, nil
+}
+
+func (b *BBoltDB) GetFromBucket(bucket string, key string) (val []byte) {
+	b.db.View(func(tx *bolt.Tx) error {
+		println(bucket)
+		b := tx.Bucket([]byte(bucket))
+		if b == nil {
+			println("no bucket")
+			return nil
+		}
+		println("found bucket")
+		v := b.Get([]byte(key))
+		println("bucket value", string(v))
+		val = v
+		return nil
+	})
+	return val
+}
+
+func (b *BBoltDB) HashBuckets(ignores func(bucketName, keyName []byte) bool) (uint32, error) {
+	h := crc32.New(crc32.MakeTable(crc32.Castagnoli))
+	err := b.db.View(func(tx *bolt.Tx) error {
+		// get root cursor
+		c := tx.Cursor()
+		for next, _ := c.First(); next != nil; next, _ = c.Next() {
+			b := tx.Bucket(next)
+			if b == nil {
+				return fmt.Errorf("cannot get hash of bucket %s", string(next))
+			}
+			h.Write(next)
+			b.ForEach(func(k, v []byte) error {
+				if ignores != nil && !ignores(next, k) {
+					h.Write(k)
+					h.Write(v)
+				}
+				return nil
+			})
+		}
+		return nil
+	})
+	if err != nil {
+		return 0, err
+	}
+	return h.Sum32(), nil
 }
 
 func (b *BBoltDB) Update(fn interface{}) error {

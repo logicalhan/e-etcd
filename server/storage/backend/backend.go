@@ -16,7 +16,6 @@ package backend
 
 import (
 	"fmt"
-	"hash/crc32"
 	"io"
 	"os"
 	"path/filepath"
@@ -460,34 +459,9 @@ func (b *backend) Snapshot() Snapshot {
 }
 
 func (b *backend) Hash(ignores func(bucketName, keyName []byte) bool) (uint32, error) {
-	h := crc32.New(crc32.MakeTable(crc32.Castagnoli))
-
 	b.mu.RLock()
 	defer b.mu.RUnlock()
-	err := b.db.View(func(tx *bolt.Tx) error {
-		c := tx.Cursor()
-		for next, _ := c.First(); next != nil; next, _ = c.Next() {
-			b := tx.Bucket(next)
-			if b == nil {
-				return fmt.Errorf("cannot get hash of bucket %s", string(next))
-			}
-			h.Write(next)
-			b.ForEach(func(k, v []byte) error {
-				if ignores != nil && !ignores(next, k) {
-					h.Write(k)
-					h.Write(v)
-				}
-				return nil
-			})
-		}
-		return nil
-	})
-
-	if err != nil {
-		return 0, err
-	}
-
-	return h.Sum32(), nil
+	return b.db.HashBuckets(ignores)
 }
 
 func (b *backend) Size() int64 {
@@ -711,7 +685,7 @@ func defragdb(odb, tmpdb interfaces.DB, limit int) error {
 		return tmptx.Commit()
 	} else if tmpdb.DBType() == "badger" {
 		// todo(logicalhan) figure this out
-
+		return tmpdb.Flatten()
 	}
 	return nil
 }

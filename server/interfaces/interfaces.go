@@ -31,6 +31,7 @@ type DB interface {
 	HasBucket(name string) bool
 	DeleteBucket(name []byte) error
 	CreateBucket(string)
+	GetFromBucket(bucket string, key string) []byte
 	String() string
 	Close() error
 	Begin(writable bool) (Tx, error)
@@ -42,6 +43,8 @@ type DB interface {
 	SetFreelistType(freelistType bolt.FreelistType)
 	FreelistType() bolt.FreelistType
 	DBType() string
+	Flatten() error
+	HashBuckets(ignores func(bucketName, keyName []byte) bool) (uint32, error)
 }
 
 type Tx interface {
@@ -71,10 +74,6 @@ type Bucket interface {
 	Root() interface{}
 	Writable() bool
 	Cursor() Cursor
-	Bucket(name []byte) Bucket
-	CreateBucket(key []byte) (Bucket, error)
-	CreateBucketIfNotExists(key []byte) (Bucket, error)
-	DeleteBucket(key []byte) error
 	Get(key []byte) []byte
 	Put(key []byte, value []byte) error
 	Delete(key []byte) error

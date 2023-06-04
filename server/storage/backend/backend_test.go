@@ -15,13 +15,13 @@
 package backend_test
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"reflect"
 	"testing"
 	"time"
 
-	"github.com/dgraph-io/badger/v4"
 	"github.com/stretchr/testify/assert"
 	bolt "go.etcd.io/bbolt"
 	"go.uber.org/zap/zaptest"
@@ -32,21 +32,25 @@ import (
 )
 
 func TestBackendClose(t *testing.T) {
-	b, _ := betesting.NewTmpBoltBackend(t, time.Hour, 10000)
 
-	// check close could work
-	done := make(chan struct{}, 1)
-	go func() {
-		err := b.Close()
-		if err != nil {
-			t.Errorf("close error = %v, want nil", err)
+	b1, _ := betesting.NewTmpBoltBackend(t, time.Hour, 10000)
+	b2, _ := betesting.NewTmpBadgerBackend(t, time.Hour, 10000)
+	backends := []backend.Backend{b1, b2}
+	for _, b := range backends {
+		// check close could work
+		done := make(chan struct{}, 1)
+		go func() {
+			err := b.Close()
+			if err != nil {
+				t.Errorf("close error = %v, want nil", err)
+			}
+			done <- struct{}{}
+		}()
+		select {
+		case <-done:
+		case <-time.After(10 * time.Second):
+			t.Errorf("failed to close database in 10s")
 		}
-		done <- struct{}{}
-	}()
-	select {
-	case <-done:
-	case <-time.After(10 * time.Second):
-		t.Errorf("failed to close database in 10s")
 	}
 }
 
@@ -90,53 +94,108 @@ func TestBackendSnapshot(t *testing.T) {
 func TestBackendBatchIntervalCommit(t *testing.T) {
 	// start backend with super short batch interval so
 	// we do not need to wait long before commit to happen.
-	b, _ := betesting.NewTmpBoltBackend(t, time.Nanosecond, 10000)
-	defer betesting.Close(t, b)
+	b1, _ := betesting.NewTmpBoltBackend(t, time.Nanosecond, 10000)
+	defer betesting.Close(t, b1)
+	b2, _ := betesting.NewTmpBadgerBackend(t, time.Nanosecond, 10000)
+	defer betesting.Close(t, b2)
+	backends := []backend.Backend{b1, b2}
+	for _, b := range backends {
+		t.Run(fmt.Sprintf("TestBackendBatchIntervalCommit[db=%s]", b.DBType()), func(t *testing.T) {
+			pc := backend.CommitsForTest(b)
 
-	pc := backend.CommitsForTest(b)
+			tx := b.BatchTx()
+			tx.Lock()
+			tx.UnsafeCreateBucket(schema.Test)
+			tx.UnsafePut(schema.Test, []byte("foo"), []byte("bar"))
+			tx.Unlock()
+
+			for i := 0; i < 10; i++ {
+				if backend.CommitsForTest(b) >= pc+1 {
+					break
+				}
+				time.Sleep(time.Duration(i*100) * time.Millisecond)
+			}
+			val := backend.DbFromBackendForTest(b).GetFromBucket("test", "foo")
+			if val == nil {
+				t.Errorf("couldn't find foo in bucket test in backend")
+			} else if !bytes.Equal([]byte("bar"), val) {
+				t.Errorf("got '%s', want 'bar'", val)
+			}
+		})
+	}
+}
+
+func TestBadgerDefrag(t *testing.T) {
+	t.SkipNow()
+	bcfg := backend.DefaultBackendConfig(zaptest.NewLogger(t))
+	// Make sure we change BackendFreelistType
+	// The goal is to verify that we restore config option after defrag.
+	if bcfg.BackendFreelistType == bolt.FreelistMapType {
+		bcfg.BackendFreelistType = bolt.FreelistArrayType
+	} else {
+		bcfg.BackendFreelistType = bolt.FreelistMapType
+	}
+	bcfg.DBType = &backend.BadgerDB
+
+	b, _ := betesting.NewTmpBackendFromCfg(t, bcfg)
+
+	defer betesting.Close(t, b)
 
 	tx := b.BatchTx()
 	tx.Lock()
 	tx.UnsafeCreateBucket(schema.Test)
-	tx.UnsafePut(schema.Test, []byte("foo"), []byte("bar"))
+	for i := 0; i < backend.DefragLimitForTest()+100; i++ {
+		tx.UnsafePut(schema.Test, []byte(fmt.Sprintf("foo_%d", i)), []byte("bar"))
+	}
 	tx.Unlock()
+	b.ForceCommit()
 
-	for i := 0; i < 10; i++ {
-		if backend.CommitsForTest(b) >= pc+1 {
-			break
-		}
-		time.Sleep(time.Duration(i*100) * time.Millisecond)
+	// remove some keys to ensure the disk space will be reclaimed after defrag
+	tx = b.BatchTx()
+	tx.Lock()
+	for i := 0; i < 50; i++ {
+		tx.UnsafeDelete(schema.Test, []byte(fmt.Sprintf("foo_%d", i)))
 	}
-	if b.DBType() == "bolt" {
-		// check whether put happens via db view
-		assert.NoError(t, backend.DbFromBackendForTest(b).View(func(tx *bolt.Tx) error {
-			bucket := tx.Bucket([]byte("test"))
-			if bucket == nil {
-				t.Errorf("bucket test does not exit")
-				return nil
-			}
-			v := bucket.Get([]byte("foo"))
-			if v == nil {
-				t.Errorf("foo key failed to written in backend")
-			}
-			return nil
-		}))
-	} else if b.DBType() == "badger" {
-		// check whether put happens via db view
-		assert.NoError(t, backend.DbFromBackendForTest(b).View(func(tx *badger.Txn) error {
-			item, err := tx.Get([]byte("test/foo"))
-			if err != nil {
-				t.Errorf("foo key failed to written in backend %v", err)
-			}
-			val, err := item.ValueCopy(nil)
-			if err != nil {
-				t.Errorf("foo key failed to written in backend %v", err)
-			}
-			println(val)
-			return nil
-		}))
+	tx.Unlock()
+	b.ForceCommit()
+
+	size := b.Size()
+
+	// shrink and check hash
+	oh, err := b.Hash(nil)
+	if err != nil {
+		t.Fatal(err)
 	}
 
+	err = b.Defrag()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	nh, err := b.Hash(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if oh != nh {
+		t.Errorf("hash = %v, want %v", nh, oh)
+	}
+
+	nsize := b.Size()
+	if nsize >= size {
+		t.Errorf("new size = %v, want < %d", nsize, size)
+	}
+	db := backend.DbFromBackendForTest(b)
+	if db.FreelistType() != bcfg.BackendFreelistType {
+		t.Errorf("db FreelistType = [%v], want [%v]", db.FreelistType(), bcfg.BackendFreelistType)
+	}
+
+	// try put more keys after shrink.
+	tx = b.BatchTx()
+	tx.Lock()
+	tx.UnsafeCreateBucket(schema.Test)
+	tx.UnsafePut(schema.Test, []byte("more"), []byte("bar"))
+	tx.Unlock()
+	b.ForceCommit()
 }
 
 func TestBackendDefrag(t *testing.T) {

@@ -32,7 +32,7 @@ import (
 // output which would have catastrophic consequences. Expected output is just
 // hardcoded, so please regenerate it every time you change input parameters.
 func TestHashByRevValue(t *testing.T) {
-	b, _ := betesting.NewDefaultTmpBackend(t)
+	b, _ := betesting.NewTmpBoltBackend(t, 0, 0)
 	s := NewStore(zaptest.NewLogger(t), b, &lease.FakeLessor{}, StoreConfig{})
 	defer cleanup(s, b)
 
