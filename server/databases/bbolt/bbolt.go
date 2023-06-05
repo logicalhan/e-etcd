@@ -17,9 +17,11 @@ limitations under the License.
 package bbolt
 
 import (
+	"bytes"
 	"fmt"
 	"hash/crc32"
 	"io"
+	"math"
 	"os"
 
 	bolt "go.etcd.io/bbolt"
@@ -339,6 +341,29 @@ func (b *BBoltBucket) Cursor() interfaces.Cursor {
 		return &BBoltCursor{cursor: curs}
 	}
 	return nil
+}
+
+func (b *BBoltBucket) UnsafeRange(key, endKey []byte, limit int64) (keys [][]byte, vs [][]byte) {
+	c := b.bucket.Cursor()
+	if limit <= 0 {
+		limit = math.MaxInt64
+	}
+	var isMatch func(b []byte) bool
+	if len(endKey) > 0 {
+		isMatch = func(b []byte) bool { return bytes.Compare(b, endKey) < 0 }
+	} else {
+		isMatch = func(b []byte) bool { return bytes.Equal(b, key) }
+		limit = 1
+	}
+
+	for ck, cv := c.Seek(key); ck != nil && isMatch(ck); ck, cv = c.Next() {
+		vs = append(vs, cv)
+		keys = append(keys, ck)
+		if limit == int64(len(keys)) {
+			break
+		}
+	}
+	return keys, vs
 }
 
 func (b *BBoltBucket) Bucket(name []byte) interfaces.Bucket {

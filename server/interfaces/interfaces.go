@@ -76,6 +76,7 @@ type Bucket interface {
 	Cursor() Cursor
 	Get(key []byte) []byte
 	Put(key []byte, value []byte) error
+	UnsafeRange(key, endKey []byte, limit int64) (keys [][]byte, vs [][]byte)
 	Delete(key []byte) error
 	Sequence() uint64
 	SetSequence(v uint64) error

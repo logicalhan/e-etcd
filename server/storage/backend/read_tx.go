@@ -113,10 +113,9 @@ func (baseReadTx *baseReadTx) UnsafeRange(bucketType Bucket, key, endKey []byte,
 	if !lockHeld {
 		baseReadTx.txMu.Lock()
 	}
-	c := bucket.Cursor()
 	baseReadTx.txMu.Unlock()
 
-	k2, v2 := unsafeRange(c, key, endKey, limit-int64(len(keys)))
+	k2, v2 := bucket.UnsafeRange(key, endKey, limit-int64(len(keys)))
 	return append(k2, keys...), append(v2, vals...)
 }
 

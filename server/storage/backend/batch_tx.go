@@ -15,8 +15,6 @@
 package backend
 
 import (
-	"bytes"
-	"math"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -184,29 +182,7 @@ func (t *batchTx) UnsafeRange(bucketType Bucket, key, endKey []byte, limit int64
 			zap.Stack("stack"),
 		)
 	}
-	return unsafeRange(bucket.Cursor(), key, endKey, limit)
-}
-
-func unsafeRange(c interfaces.Cursor, key, endKey []byte, limit int64) (keys [][]byte, vs [][]byte) {
-	if limit <= 0 {
-		limit = math.MaxInt64
-	}
-	var isMatch func(b []byte) bool
-	if len(endKey) > 0 {
-		isMatch = func(b []byte) bool { return bytes.Compare(b, endKey) < 0 }
-	} else {
-		isMatch = func(b []byte) bool { return bytes.Equal(b, key) }
-		limit = 1
-	}
-
-	for ck, cv := c.Seek(key); ck != nil && isMatch(ck); ck, cv = c.Next() {
-		vs = append(vs, cv)
-		keys = append(keys, ck)
-		if limit == int64(len(keys)) {
-			break
-		}
-	}
-	return keys, vs
+	return bucket.UnsafeRange(key, endKey, limit)
 }
 
 // UnsafeDelete must be called holding the lock on the tx.
