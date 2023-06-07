@@ -982,6 +982,7 @@ func (b *fakeBackend) ForceCommit()                                             
 func (b *fakeBackend) Defrag() error                                              { return nil }
 func (b *fakeBackend) Close() error                                               { return nil }
 func (b *fakeBackend) SetTxPostLockInsideApplyHook(func())                        {}
+func (b *fakeBackend) DBType() backend.DBType                                     { return backend.BoltDB }
 
 type indexGetResp struct {
 	rev     revision

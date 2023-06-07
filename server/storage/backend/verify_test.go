@@ -72,22 +72,26 @@ func TestLockVerify(t *testing.T) {
 	revertVerifyFunc := verify.EnableVerifications(backend.ENV_VERIFY_VALUE_LOCK)
 	defer revertVerifyFunc()
 	for _, tc := range tcs {
-		t.Run(tc.name, func(t *testing.T) {
+		b1, _ := betesting.NewTmpBoltBackend(t, time.Hour, 10000)
+		b2, _ := betesting.NewTmpBadgerBackend(t, time.Hour, 10000)
+		backends := []backend.Backend{b1, b2}
+		for _, b := range backends {
+			t.Run(tc.name, func(t *testing.T) {
 
-			be, _ := betesting.NewTmpBackend(t, time.Hour, 10000)
-			be.SetTxPostLockInsideApplyHook(tc.txPostLockInsideApplyHook)
+				b.SetTxPostLockInsideApplyHook(tc.txPostLockInsideApplyHook)
 
-			hasPaniced := handlePanic(func() {
-				if tc.insideApply {
-					applyEntries(be, tc.lock)
-				} else {
-					tc.lock(be.BatchTx())
+				hasPaniced := handlePanic(func() {
+					if tc.insideApply {
+						applyEntries(b, tc.lock)
+					} else {
+						tc.lock(b.BatchTx())
+					}
+				}) != nil
+				if hasPaniced != tc.expectPanic {
+					t.Errorf("%v != %v", hasPaniced, tc.expectPanic)
 				}
-			}) != nil
-			if hasPaniced != tc.expectPanic {
-				t.Errorf("%v != %v", hasPaniced, tc.expectPanic)
-			}
-		})
+			})
+		}
 	}
 }
 

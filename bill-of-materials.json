@@ -108,6 +108,33 @@
 		]
 	},
 	{
+		"project": "github.com/dgraph-io/badger/v4",
+		"licenses": [
+			{
+				"type": "Apache License 2.0",
+				"confidence": 0.9585253456221198
+			}
+		]
+	},
+	{
+		"project": "github.com/dgraph-io/ristretto",
+		"licenses": [
+			{
+				"type": "Apache License 2.0",
+				"confidence": 0.9585253456221198
+			}
+		]
+	},
+	{
+		"project": "github.com/dgraph-io/ristretto/z",
+		"licenses": [
+			{
+				"type": "MIT License",
+				"confidence": 0.8303571428571429
+			}
+		]
+	},
+	{
 		"project": "github.com/dustin/go-humanize",
 		"licenses": [
 			{
@@ -162,6 +189,15 @@
 		]
 	},
 	{
+		"project": "github.com/golang/glog",
+		"licenses": [
+			{
+				"type": "Apache License 2.0",
+				"confidence": 0.9966703662597114
+			}
+		]
+	},
+	{
 		"project": "github.com/golang/groupcache/lru",
 		"licenses": [
 			{
@@ -180,7 +216,25 @@
 		]
 	},
 	{
+		"project": "github.com/golang/snappy",
+		"licenses": [
+			{
+				"type": "BSD 3-clause \"New\" or \"Revised\" License",
+				"confidence": 0.9663865546218487
+			}
+		]
+	},
+	{
 		"project": "github.com/google/btree",
+		"licenses": [
+			{
+				"type": "Apache License 2.0",
+				"confidence": 1
+			}
+		]
+	},
+	{
+		"project": "github.com/google/flatbuffers/go",
 		"licenses": [
 			{
 				"type": "Apache License 2.0",
@@ -261,6 +315,24 @@
 		]
 	},
 	{
+		"project": "github.com/klauspost/compress",
+		"licenses": [
+			{
+				"type": "BSD 3-clause \"New\" or \"Revised\" License",
+				"confidence": 0.9663865546218487
+			}
+		]
+	},
+	{
+		"project": "github.com/klauspost/compress/zstd/internal/xxhash",
+		"licenses": [
+			{
+				"type": "MIT License",
+				"confidence": 1
+			}
+		]
+	},
+	{
 		"project": "github.com/mattn/go-colorable",
 		"licenses": [
 			{
@@ -302,6 +374,15 @@
 			{
 				"type": "MIT License",
 				"confidence": 0.9891304347826086
+			}
+		]
+	},
+	{
+		"project": "github.com/pkg/errors",
+		"licenses": [
+			{
+				"type": "BSD 2-clause \"Simplified\" License",
+				"confidence": 1
 			}
 		]
 	},
@@ -523,6 +604,15 @@
 	},
 	{
 		"project": "go.etcd.io/raft/v3",
+		"licenses": [
+			{
+				"type": "Apache License 2.0",
+				"confidence": 1
+			}
+		]
+	},
+	{
+		"project": "go.opencensus.io",
 		"licenses": [
 			{
 				"type": "Apache License 2.0",

@@ -30,10 +30,13 @@ import (
 	"go.uber.org/zap/zaptest"
 
 	bolt "go.etcd.io/bbolt"
+
 	"go.etcd.io/etcd/server/v3/storage/datadir"
 	"go.etcd.io/etcd/server/v3/storage/schema"
 	"go.etcd.io/etcd/server/v3/storage/wal"
 	"go.etcd.io/etcd/server/v3/storage/wal/walpb"
+
+	"go.etcd.io/raft/v3/raftpb"
 
 	"go.etcd.io/etcd/api/v3/etcdserverpb"
 	"go.etcd.io/etcd/api/v3/version"
@@ -43,7 +46,6 @@ import (
 	"go.etcd.io/etcd/server/v3/etcdserver/api/snap"
 	"go.etcd.io/etcd/server/v3/etcdserver/api/v2store"
 	serverstorage "go.etcd.io/etcd/server/v3/storage"
-	"go.etcd.io/raft/v3/raftpb"
 )
 
 func TestBootstrapExistingClusterNoWALMaxLearner(t *testing.T) {
@@ -296,9 +298,10 @@ func createSnapshotAndBackendDB(cfg config.ServerConfig, snapshotTerm, snapshotI
 	}
 	sdb := filepath.Join(cfg.SnapDir(), fmt.Sprintf("%016x.snap.db", snapshotIndex))
 	if err = os.Rename(cfg.BackendPath(), sdb); err != nil {
+		println("han is erring here", err.Error())
 		return
 	}
-
+	println("han is now here")
 	// create backend db file
 	be = serverstorage.OpenBackend(cfg, nil)
 	schema.CreateMetaBucket(be.BatchTx())

@@ -15,193 +15,223 @@
 package backend_test
 
 import (
+	"bytes"
+	"fmt"
 	"reflect"
 	"testing"
 	"time"
 
-	bolt "go.etcd.io/bbolt"
 	"go.etcd.io/etcd/server/v3/storage/backend"
 	betesting "go.etcd.io/etcd/server/v3/storage/backend/testing"
 	"go.etcd.io/etcd/server/v3/storage/schema"
 )
 
 func TestBatchTxPut(t *testing.T) {
-	b, _ := betesting.NewTmpBackend(t, time.Hour, 10000)
-	defer betesting.Close(t, b)
+	b1, _ := betesting.NewTmpBoltBackend(t, time.Nanosecond, 10000)
+	defer betesting.Close(t, b1)
+	b2, _ := betesting.NewTmpBadgerBackend(t, time.Nanosecond, 10000)
+	defer betesting.Close(t, b2)
+	backends := []backend.Backend{b1, b2}
+	for _, b := range backends {
 
-	tx := b.BatchTx()
+		tx := b.BatchTx()
 
-	tx.Lock()
-
-	// create bucket
-	tx.UnsafeCreateBucket(schema.Test)
-
-	// put
-	v := []byte("bar")
-	tx.UnsafePut(schema.Test, []byte("foo"), v)
-
-	tx.Unlock()
-
-	// check put result before and after tx is committed
-	for k := 0; k < 2; k++ {
 		tx.Lock()
-		_, gv := tx.UnsafeRange(schema.Test, []byte("foo"), nil, 0)
+
+		// create bucket
+		tx.UnsafeCreateBucket(schema.Test)
+
+		// put
+		v := []byte("bar")
+		tx.UnsafePut(schema.Test, []byte("foo"), v)
+
 		tx.Unlock()
-		if !reflect.DeepEqual(gv[0], v) {
-			t.Errorf("v = %s, want %s", string(gv[0]), string(v))
+
+		// check put result before and after tx is committed
+		for k := 0; k < 2; k++ {
+			tx := b.BatchTx()
+			tx.Lock()
+			_, gv := tx.UnsafeRange(schema.Test, []byte("foo"), nil, 0)
+
+			tx.Unlock()
+			if !reflect.DeepEqual(gv[0], v) {
+				t.Errorf("v = %s, want %s", string(gv[0]), string(v))
+			}
+			tx.Commit()
 		}
-		tx.Commit()
 	}
 }
 
 func TestBatchTxRange(t *testing.T) {
-	b, _ := betesting.NewTmpBackend(t, time.Hour, 10000)
-	defer betesting.Close(t, b)
+	b1, _ := betesting.NewTmpBoltBackend(t, time.Nanosecond, 10000)
+	defer betesting.Close(t, b1)
+	b2, _ := betesting.NewTmpBadgerBackend(t, time.Nanosecond, 10000)
+	defer betesting.Close(t, b2)
+	backends := []backend.Backend{b1, b2}
+	for _, b := range backends {
 
-	tx := b.BatchTx()
-	tx.Lock()
-	defer tx.Unlock()
+		tx := b.BatchTx()
+		tx.Lock()
+		defer tx.Unlock()
 
-	tx.UnsafeCreateBucket(schema.Test)
-	// put keys
-	allKeys := [][]byte{[]byte("foo"), []byte("foo1"), []byte("foo2")}
-	allVals := [][]byte{[]byte("bar"), []byte("bar1"), []byte("bar2")}
-	for i := range allKeys {
-		tx.UnsafePut(schema.Test, allKeys[i], allVals[i])
-	}
-
-	tests := []struct {
-		key    []byte
-		endKey []byte
-		limit  int64
-
-		wkeys [][]byte
-		wvals [][]byte
-	}{
-		// single key
-		{
-			[]byte("foo"), nil, 0,
-			allKeys[:1], allVals[:1],
-		},
-		// single key, bad
-		{
-			[]byte("doo"), nil, 0,
-			nil, nil,
-		},
-		// key range
-		{
-			[]byte("foo"), []byte("foo1"), 0,
-			allKeys[:1], allVals[:1],
-		},
-		// key range, get all keys
-		{
-			[]byte("foo"), []byte("foo3"), 0,
-			allKeys, allVals,
-		},
-		// key range, bad
-		{
-			[]byte("goo"), []byte("goo3"), 0,
-			nil, nil,
-		},
-		// key range with effective limit
-		{
-			[]byte("foo"), []byte("foo3"), 1,
-			allKeys[:1], allVals[:1],
-		},
-		// key range with limit
-		{
-			[]byte("foo"), []byte("foo3"), 4,
-			allKeys, allVals,
-		},
-	}
-	for i, tt := range tests {
-		keys, vals := tx.UnsafeRange(schema.Test, tt.key, tt.endKey, tt.limit)
-		if !reflect.DeepEqual(keys, tt.wkeys) {
-			t.Errorf("#%d: keys = %+v, want %+v", i, keys, tt.wkeys)
+		tx.UnsafeCreateBucket(schema.Test)
+		// put keys
+		allKeys := [][]byte{[]byte("foo"), []byte("foo1"), []byte("foo2")}
+		allVals := [][]byte{[]byte("bar"), []byte("bar1"), []byte("bar2")}
+		for i := range allKeys {
+			tx.UnsafePut(schema.Test, allKeys[i], allVals[i])
 		}
-		if !reflect.DeepEqual(vals, tt.wvals) {
-			t.Errorf("#%d: vals = %+v, want %+v", i, vals, tt.wvals)
+
+		tests := []struct {
+			key    []byte
+			endKey []byte
+			limit  int64
+
+			wkeys [][]byte
+			wvals [][]byte
+		}{
+			// single key
+			{
+				[]byte("foo"), nil, 0,
+				allKeys[:1], allVals[:1],
+			},
+			// single key, bad
+			{
+				[]byte("doo"), nil, 0,
+				nil, nil,
+			},
+			// key range
+			{
+				[]byte("foo"), []byte("foo1"), 0,
+				allKeys[:1], allVals[:1],
+			},
+			// key range, get all keys
+			{
+				[]byte("foo"), []byte("foo3"), 0,
+				allKeys, allVals,
+			},
+			// key range, bad
+			{
+				[]byte("goo"), []byte("goo3"), 0,
+				nil, nil,
+			},
+			// key range with effective limit
+			{
+				[]byte("foo"), []byte("foo3"), 1,
+				allKeys[:1], allVals[:1],
+			},
+			// key range with limit
+			{
+				[]byte("foo"), []byte("foo3"), 4,
+				allKeys, allVals,
+			},
+		}
+		for i, tt := range tests {
+			ks, vs := tx.UnsafeRange(schema.Test, tt.key, tt.endKey, tt.limit)
+			keys := []string{}
+			vals := []string{}
+			for j, k := range ks {
+				keys = append(keys, string(k))
+				vals = append(vals, string(vs[j]))
+			}
+			wkeys := []string{}
+			for _, k := range tt.wkeys {
+				wkeys = append(wkeys, string(k))
+			}
+			wvals := []string{}
+			for _, k := range tt.wvals {
+				wvals = append(wvals, string(k))
+			}
+
+			if !reflect.DeepEqual(keys, wkeys) {
+				t.Errorf("#%d: keys = %+v, want %+v", i, keys, wkeys)
+			}
+			if !reflect.DeepEqual(vals, wvals) {
+				t.Errorf("#%d: vals = %+v, want %+v", i, vals, wvals)
+			}
 		}
 	}
 }
 
 func TestBatchTxDelete(t *testing.T) {
-	b, _ := betesting.NewTmpBackend(t, time.Hour, 10000)
-	defer betesting.Close(t, b)
+	b1, _ := betesting.NewTmpBoltBackend(t, time.Nanosecond, 10000)
+	defer betesting.Close(t, b1)
+	b2, _ := betesting.NewTmpBadgerBackend(t, time.Nanosecond, 10000)
+	defer betesting.Close(t, b2)
+	backends := []backend.Backend{b1, b2}
+	for _, b := range backends {
 
-	tx := b.BatchTx()
-	tx.Lock()
-
-	tx.UnsafeCreateBucket(schema.Test)
-	tx.UnsafePut(schema.Test, []byte("foo"), []byte("bar"))
-
-	tx.UnsafeDelete(schema.Test, []byte("foo"))
-
-	tx.Unlock()
-
-	// check put result before and after tx is committed
-	for k := 0; k < 2; k++ {
+		tx := b.BatchTx()
 		tx.Lock()
-		ks, _ := tx.UnsafeRange(schema.Test, []byte("foo"), nil, 0)
+
+		tx.UnsafeCreateBucket(schema.Test)
+		tx.UnsafePut(schema.Test, []byte("foo"), []byte("bar"))
+
+		tx.UnsafeDelete(schema.Test, []byte("foo"))
+
 		tx.Unlock()
-		if len(ks) != 0 {
-			t.Errorf("keys on foo = %v, want nil", ks)
+
+		// check put result before and after tx is committed
+		for k := 0; k < 2; k++ {
+			tx.Lock()
+			ks, _ := tx.UnsafeRange(schema.Test, []byte("foo"), nil, 0)
+			tx.Unlock()
+			if len(ks) != 0 {
+				keys := []string{}
+				for _, k := range ks {
+					keys = append(keys, string(k))
+				}
+				t.Errorf("keys on foo = %v, want nil", keys)
+			}
+			tx.Commit()
 		}
-		tx.Commit()
 	}
 }
 
 func TestBatchTxCommit(t *testing.T) {
-	b, _ := betesting.NewTmpBackend(t, time.Hour, 10000)
-	defer betesting.Close(t, b)
+	b1, _ := betesting.NewTmpBoltBackend(t, time.Nanosecond, 10000)
+	defer betesting.Close(t, b1)
+	b2, _ := betesting.NewTmpBadgerBackend(t, time.Nanosecond, 10000)
+	defer betesting.Close(t, b2)
+	backends := []backend.Backend{b1, b2}
+	for _, b := range backends {
+		expectedVal := []byte("bar")
+		tx := b.BatchTx()
+		tx.Lock()
+		tx.UnsafeCreateBucket(schema.Test)
+		tx.UnsafePut(schema.Test, []byte("foo"), expectedVal)
+		tx.Unlock()
 
-	tx := b.BatchTx()
-	tx.Lock()
-	tx.UnsafeCreateBucket(schema.Test)
-	tx.UnsafePut(schema.Test, []byte("foo"), []byte("bar"))
-	tx.Unlock()
-
-	tx.Commit()
-
-	// check whether put happens via db view
-	backend.DbFromBackendForTest(b).View(func(tx *bolt.Tx) error {
-		bucket := tx.Bucket(schema.Test.Name())
-		if bucket == nil {
-			t.Errorf("bucket test does not exit")
-			return nil
+		tx.Commit()
+		val := backend.DbFromBackendForTest(b).GetFromBucket(string(schema.Test.Name()), "foo")
+		if !bytes.Equal(val, expectedVal) {
+			t.Errorf("got %s, want %s", val, expectedVal)
 		}
-		v := bucket.Get([]byte("foo"))
-		if v == nil {
-			t.Errorf("foo key failed to written in backend")
-		}
-		return nil
-	})
+	}
 }
 
 func TestBatchTxBatchLimitCommit(t *testing.T) {
 	// start backend with batch limit 1 so one write can
 	// trigger a commit
-	b, _ := betesting.NewTmpBackend(t, time.Hour, 1)
-	defer betesting.Close(t, b)
+	b1, _ := betesting.NewTmpBoltBackend(t, time.Nanosecond, 1)
+	defer betesting.Close(t, b1)
+	b2, _ := betesting.NewTmpBadgerBackend(t, time.Nanosecond, 1)
+	defer betesting.Close(t, b2)
+	backends := []backend.Backend{b1, b2}
+	for _, b := range backends {
+		t.Run(fmt.Sprintf("TestBatchTxBatchLimitCommit[db=%s]", b.DBType()), func(t *testing.T) {
+			expectedVal := []byte("bar")
+			tx := b.BatchTx()
+			tx.Lock()
+			tx.UnsafeCreateBucket(schema.Test)
+			tx.UnsafePut(schema.Test, []byte("foo"), expectedVal)
+			tx.Unlock()
 
-	tx := b.BatchTx()
-	tx.Lock()
-	tx.UnsafeCreateBucket(schema.Test)
-	tx.UnsafePut(schema.Test, []byte("foo"), []byte("bar"))
-	tx.Unlock()
+			val := backend.DbFromBackendForTest(b).GetFromBucket(string(schema.Test.Name()), "foo")
+			if !bytes.Equal(val, expectedVal) {
+				t.Errorf("got %s, want %s", val, expectedVal)
+			}
+		})
 
-	// batch limit commit should have been triggered
-	// check whether put happens via db view
-	backend.DbFromBackendForTest(b).View(func(tx *bolt.Tx) error {
-		bucket := tx.Bucket(schema.Test.Name())
-		if bucket == nil {
-			t.Errorf("bucket test does not exit")
-			return nil
-		}
-		v := bucket.Get([]byte("foo"))
-		if v == nil {
-			t.Errorf("foo key failed to written in backend")
-		}
-		return nil
-	})
+	}
 }

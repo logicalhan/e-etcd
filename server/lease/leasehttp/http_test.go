@@ -29,7 +29,7 @@ import (
 
 func TestRenewHTTP(t *testing.T) {
 	lg := zaptest.NewLogger(t)
-	be, _ := betesting.NewTmpBackend(t, time.Hour, 10000)
+	be, _ := betesting.NewTmpBoltBackend(t, time.Hour, 10000)
 	defer betesting.Close(t, be)
 
 	le := lease.NewLessor(lg, be, nil, lease.LessorConfig{MinLeaseTTL: int64(5)})
@@ -53,7 +53,7 @@ func TestRenewHTTP(t *testing.T) {
 
 func TestTimeToLiveHTTP(t *testing.T) {
 	lg := zaptest.NewLogger(t)
-	be, _ := betesting.NewTmpBackend(t, time.Hour, 10000)
+	be, _ := betesting.NewTmpBoltBackend(t, time.Hour, 10000)
 	defer betesting.Close(t, be)
 
 	le := lease.NewLessor(lg, be, nil, lease.LessorConfig{MinLeaseTTL: int64(5)})
@@ -94,7 +94,7 @@ func TestTimeToLiveHTTPTimeout(t *testing.T) {
 
 func testApplyTimeout(t *testing.T, f func(*lease.Lease, string) error) {
 	lg := zaptest.NewLogger(t)
-	be, _ := betesting.NewTmpBackend(t, time.Hour, 10000)
+	be, _ := betesting.NewTmpBoltBackend(t, time.Hour, 10000)
 	defer betesting.Close(t, be)
 
 	le := lease.NewLessor(lg, be, nil, lease.LessorConfig{MinLeaseTTL: int64(5)})

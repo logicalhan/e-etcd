@@ -19,11 +19,12 @@ import (
 	"os"
 	"time"
 
+	"go.etcd.io/raft/v3/raftpb"
+
 	"go.etcd.io/etcd/server/v3/config"
 	"go.etcd.io/etcd/server/v3/etcdserver/api/snap"
 	"go.etcd.io/etcd/server/v3/storage/backend"
 	"go.etcd.io/etcd/server/v3/storage/schema"
-	"go.etcd.io/raft/v3/raftpb"
 
 	"go.uber.org/zap"
 )
@@ -52,6 +53,7 @@ func newBackend(cfg config.ServerConfig, hooks backend.Hooks) backend.Backend {
 	}
 	bcfg.Mlock = cfg.ExperimentalMemoryMlock
 	bcfg.Hooks = hooks
+	bcfg.DBType = &backend.BadgerDB
 	return backend.New(bcfg)
 }
 
@@ -60,6 +62,9 @@ func OpenSnapshotBackend(cfg config.ServerConfig, ss *snap.Snapshotter, snapshot
 	snapPath, err := ss.DBFilePath(snapshot.Metadata.Index)
 	if err != nil {
 		return nil, fmt.Errorf("failed to find database snapshot file (%v)", err)
+	}
+	if err := os.RemoveAll(cfg.BackendPath()); err != nil {
+		return nil, fmt.Errorf("failed to remove database dir (%v)", err)
 	}
 	if err := os.Rename(snapPath, cfg.BackendPath()); err != nil {
 		return nil, fmt.Errorf("failed to rename database snapshot file (%v)", err)

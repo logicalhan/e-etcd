@@ -164,7 +164,7 @@ func TestMigrationStepExecute(t *testing.T) {
 			}
 			lg := zaptest.NewLogger(t)
 
-			be, _ := betesting.NewTmpBackend(t, time.Microsecond, 10)
+			be, _ := betesting.NewTmpBoltBackend(t, time.Microsecond, 10)
 			defer be.Close()
 			tx := be.BatchTx()
 			if tx == nil {
