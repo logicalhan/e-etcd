@@ -79,9 +79,6 @@ func (b *BadgerDB) Get(key []byte) ([]byte, error) {
 			return err
 		}
 		err = item.Value(func(val []byte) error {
-			fmt.Printf("The answer is: %s\n", val)
-
-			// Copying or parsing val is valid.
 			valCopy = append([]byte{}, val...)
 			return nil
 		})
@@ -593,6 +590,6 @@ func (b *BadgerBucket) FillPercent() float64 {
 }
 
 func (b *BadgerBucket) SetFillPercent(f float64) {
-	//TODO implement me
-	panic("implement me")
+	// no-opt
+	return
 }

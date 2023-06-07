@@ -15,6 +15,7 @@
 package cindex
 
 import (
+	"fmt"
 	"math/rand"
 	"testing"
 	"time"
@@ -31,40 +32,47 @@ import (
 // TestConsistentIndex ensures that LoadConsistentIndex/Save/ConsistentIndex and backend.BatchTx can work well together.
 func TestConsistentIndex(t *testing.T) {
 
-	be, tmpPath := betesting.NewTmpBoltBackend(t, time.Microsecond, 10)
-	ci := NewConsistentIndex(be)
+	b1, tmpPath1 := betesting.NewTmpBoltBackend(t, time.Nanosecond, 10)
+	b2, tmpPath2 := betesting.NewTmpBadgerBackend(t, time.Nanosecond, 10)
+	backends := []backend.Backend{b1, b2}
+	tmppaths := []string{tmpPath1, tmpPath2}
+	for i, be := range backends {
+		t.Run(fmt.Sprintf("TestConsistentIndex[db=%s]", be.DBType()), func(t *testing.T) {
+			ci := NewConsistentIndex(be)
 
-	tx := be.BatchTx()
-	if tx == nil {
-		t.Fatal("batch tx is nil")
+			tx := be.BatchTx()
+			if tx == nil {
+				t.Fatal("batch tx is nil")
+			}
+			tx.Lock()
+
+			schema.UnsafeCreateMetaBucket(tx)
+			tx.Unlock()
+			be.ForceCommit()
+			r := uint64(7890123)
+			term := uint64(234)
+			ci.SetConsistentIndex(r, term)
+			index := ci.ConsistentIndex()
+			if index != r {
+				t.Errorf("expected %d,got %d", r, index)
+			}
+			tx.Lock()
+			ci.UnsafeSave(tx)
+			tx.Unlock()
+			be.ForceCommit()
+			be.Close()
+			beType := be.DBType()
+			b := backend.NewDefaultBackend(zaptest.NewLogger(t), tmppaths[i], &beType)
+			defer b.Close()
+			ci.SetBackend(b)
+			index = ci.ConsistentIndex()
+			assert.Equal(t, r, index)
+
+			ci = NewConsistentIndex(b)
+			index = ci.ConsistentIndex()
+			assert.Equal(t, r, index)
+		})
 	}
-	tx.Lock()
-
-	schema.UnsafeCreateMetaBucket(tx)
-	tx.Unlock()
-	be.ForceCommit()
-	r := uint64(7890123)
-	term := uint64(234)
-	ci.SetConsistentIndex(r, term)
-	index := ci.ConsistentIndex()
-	if index != r {
-		t.Errorf("expected %d,got %d", r, index)
-	}
-	tx.Lock()
-	ci.UnsafeSave(tx)
-	tx.Unlock()
-	be.ForceCommit()
-	be.Close()
-
-	b := backend.NewDefaultBackend(zaptest.NewLogger(t), tmpPath)
-	defer b.Close()
-	ci.SetBackend(b)
-	index = ci.ConsistentIndex()
-	assert.Equal(t, r, index)
-
-	ci = NewConsistentIndex(b)
-	index = ci.ConsistentIndex()
-	assert.Equal(t, r, index)
 }
 
 func TestConsistentIndexDecrease(t *testing.T) {
@@ -107,12 +115,12 @@ func TestConsistentIndexDecrease(t *testing.T) {
 			tx.Unlock()
 			be.ForceCommit()
 			be.Close()
-
-			be = backend.NewDefaultBackend(zaptest.NewLogger(t), tmpPath)
-			defer be.Close()
-			ci := NewConsistentIndex(be)
+			betype := be.DBType()
+			nbe := backend.NewDefaultBackend(zaptest.NewLogger(t), tmpPath, &betype)
+			defer nbe.Close()
+			ci := NewConsistentIndex(nbe)
 			ci.SetConsistentIndex(tc.index, tc.term)
-			tx = be.BatchTx()
+			tx = nbe.BatchTx()
 			func() {
 				tx.Lock()
 				defer tx.Unlock()
@@ -125,7 +133,7 @@ func TestConsistentIndexDecrease(t *testing.T) {
 			if !tc.panicExpected {
 				assert.Equal(t, tc.index, ci.ConsistentIndex())
 
-				ci = NewConsistentIndex(be)
+				ci = NewConsistentIndex(nbe)
 				assert.Equal(t, tc.index, ci.ConsistentIndex())
 			}
 		})

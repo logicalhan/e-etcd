@@ -28,9 +28,14 @@ import (
 	"go.etcd.io/etcd/client/pkg/v3/transport"
 	clientv3 "go.etcd.io/etcd/client/v3"
 	etcdctlcmd "go.etcd.io/etcd/etcdctl/v3/ctlv3/command"
+	"go.etcd.io/etcd/server/v3/storage/backend"
 
 	"go.etcd.io/etcd/tests/v3/framework/config"
 	intf "go.etcd.io/etcd/tests/v3/framework/interfaces"
+)
+
+var (
+	defaultIntegrationDBType = backend.BadgerDB
 )
 
 type integrationRunner struct{}
@@ -56,6 +61,7 @@ func (e integrationRunner) NewCluster(ctx context.Context, t testing.TB, opts ..
 		DisableStrictReconfigCheck: !cfg.StrictReconfigCheck,
 		AuthToken:                  cfg.AuthToken,
 		SnapshotCount:              uint64(cfg.SnapshotCount),
+		DBType:                     defaultIntegrationDBType,
 	}
 	integrationCfg.ClientTLS, err = tlsInfo(t, cfg.ClientTLS)
 	if err != nil {

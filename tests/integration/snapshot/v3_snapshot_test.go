@@ -24,14 +24,16 @@ import (
 	"testing"
 	"time"
 
+	"go.uber.org/zap/zapcore"
+	"go.uber.org/zap/zaptest"
+
 	"go.etcd.io/etcd/client/pkg/v3/testutil"
 	clientv3 "go.etcd.io/etcd/client/v3"
 	"go.etcd.io/etcd/etcdutl/v3/snapshot"
 	"go.etcd.io/etcd/server/v3/embed"
+	"go.etcd.io/etcd/server/v3/storage/backend"
 	integration2 "go.etcd.io/etcd/tests/v3/framework/integration"
 	"go.etcd.io/etcd/tests/v3/framework/testutils"
-	"go.uber.org/zap/zapcore"
-	"go.uber.org/zap/zaptest"
 )
 
 // TestSnapshotV3RestoreSingle tests single node cluster restoring
@@ -39,64 +41,71 @@ import (
 func TestSnapshotV3RestoreSingle(t *testing.T) {
 	integration2.BeforeTest(t)
 	kvs := []kv{{"foo1", "bar1"}, {"foo2", "bar2"}, {"foo3", "bar3"}}
-	dbPath := createSnapshotFile(t, kvs)
+	betypes := []backend.DBType{backend.BoltDB, backend.BadgerDB}
+	for _, dbType := range betypes {
+		t.Run(fmt.Sprintf("TestSnapshotV3RestoreSingle[%s]", dbType), func(t *testing.T) {
+			dbPath := createSnapshotFile(t, kvs, dbType)
 
-	clusterN := 1
-	urls := newEmbedURLs(t, clusterN*2)
-	cURLs, pURLs := urls[:clusterN], urls[clusterN:]
+			clusterN := 1
+			urls := newEmbedURLs(t, clusterN*2)
+			cURLs, pURLs := urls[:clusterN], urls[clusterN:]
 
-	cfg := integration2.NewEmbedConfig(t, "s1")
-	cfg.InitialClusterToken = testClusterTkn
-	cfg.ClusterState = "existing"
-	cfg.ListenClientUrls, cfg.AdvertiseClientUrls = cURLs, cURLs
-	cfg.ListenPeerUrls, cfg.AdvertisePeerUrls = pURLs, pURLs
-	cfg.InitialCluster = fmt.Sprintf("%s=%s", cfg.Name, pURLs[0].String())
+			cfg := integration2.NewEmbedConfig(t, "s1")
+			cfg.InitialClusterToken = testClusterTkn
+			cfg.ClusterState = "existing"
+			cfg.ListenClientUrls, cfg.AdvertiseClientUrls = cURLs, cURLs
+			cfg.ListenPeerUrls, cfg.AdvertisePeerUrls = pURLs, pURLs
+			cfg.InitialCluster = fmt.Sprintf("%s=%s", cfg.Name, pURLs[0].String())
+			cfg.DBType = string(dbType)
+			sp := snapshot.NewV3(zaptest.NewLogger(t), dbType)
+			pss := make([]string, 0, len(pURLs))
+			for _, p := range pURLs {
+				pss = append(pss, p.String())
+			}
+			if err := sp.Restore(snapshot.RestoreConfig{
+				SnapshotPath:        dbPath,
+				Name:                cfg.Name,
+				OutputDataDir:       cfg.Dir,
+				InitialCluster:      cfg.InitialCluster,
+				InitialClusterToken: cfg.InitialClusterToken,
+				PeerURLs:            pss,
+				DBType:              dbType,
+			}); err != nil {
+				t.Fatal(err)
+			}
 
-	sp := snapshot.NewV3(zaptest.NewLogger(t))
-	pss := make([]string, 0, len(pURLs))
-	for _, p := range pURLs {
-		pss = append(pss, p.String())
-	}
-	if err := sp.Restore(snapshot.RestoreConfig{
-		SnapshotPath:        dbPath,
-		Name:                cfg.Name,
-		OutputDataDir:       cfg.Dir,
-		InitialCluster:      cfg.InitialCluster,
-		InitialClusterToken: cfg.InitialClusterToken,
-		PeerURLs:            pss,
-	}); err != nil {
-		t.Fatal(err)
+			srv, err := embed.StartEtcd(cfg)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer func() {
+				srv.Close()
+			}()
+			select {
+			case <-srv.Server.ReadyNotify():
+			case <-time.After(3 * time.Second):
+				t.Fatalf("failed to start restored etcd member")
+			}
+
+			var cli *clientv3.Client
+			cli, err = integration2.NewClient(t, clientv3.Config{Endpoints: []string{cfg.AdvertiseClientUrls[0].String()}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer cli.Close()
+			for i := range kvs {
+				var gresp *clientv3.GetResponse
+				gresp, err = cli.Get(context.Background(), kvs[i].k)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if string(gresp.Kvs[0].Value) != kvs[i].v {
+					t.Fatalf("#%d: value expected %s, got %s", i, kvs[i].v, string(gresp.Kvs[0].Value))
+				}
+			}
+		})
 	}
 
-	srv, err := embed.StartEtcd(cfg)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() {
-		srv.Close()
-	}()
-	select {
-	case <-srv.Server.ReadyNotify():
-	case <-time.After(3 * time.Second):
-		t.Fatalf("failed to start restored etcd member")
-	}
-
-	var cli *clientv3.Client
-	cli, err = integration2.NewClient(t, clientv3.Config{Endpoints: []string{cfg.AdvertiseClientUrls[0].String()}})
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer cli.Close()
-	for i := range kvs {
-		var gresp *clientv3.GetResponse
-		gresp, err = cli.Get(context.Background(), kvs[i].k)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if string(gresp.Kvs[0].Value) != kvs[i].v {
-			t.Fatalf("#%d: value expected %s, got %s", i, kvs[i].v, string(gresp.Kvs[0].Value))
-		}
-	}
 }
 
 // TestSnapshotV3RestoreMulti ensures that multiple members
@@ -105,10 +114,11 @@ func TestSnapshotV3RestoreSingle(t *testing.T) {
 func TestSnapshotV3RestoreMulti(t *testing.T) {
 	integration2.BeforeTest(t)
 	kvs := []kv{{"foo1", "bar1"}, {"foo2", "bar2"}, {"foo3", "bar3"}}
-	dbPath := createSnapshotFile(t, kvs)
+	dbType := backend.BadgerDB
+	dbPath := createSnapshotFile(t, kvs, dbType)
 
 	clusterN := 3
-	cURLs, _, srvs := restoreCluster(t, clusterN, dbPath)
+	cURLs, _, srvs := restoreCluster(t, clusterN, dbPath, dbType)
 	defer func() {
 		for i := 0; i < clusterN; i++ {
 			srvs[i].Close()
@@ -145,7 +155,7 @@ func TestCorruptedBackupFileCheck(t *testing.T) {
 		t.Fatalf("test file [%s] does not exist: %v", dbPath, err)
 	}
 
-	sp := snapshot.NewV3(zaptest.NewLogger(t))
+	sp := snapshot.NewV3(zaptest.NewLogger(t), backend.BadgerDB)
 	_, err := sp.Status(dbPath)
 	expectedErrKeywords := "snapshot file integrity check failed"
 	/* example error message:
@@ -168,7 +178,7 @@ type kv struct {
 }
 
 // creates a snapshot file and returns the file path.
-func createSnapshotFile(t *testing.T, kvs []kv) string {
+func createSnapshotFile(t *testing.T, kvs []kv, dbtype backend.DBType) string {
 	testutil.SkipTestIfShortMode(t,
 		"Snapshot creation tests are depending on embedded etcd server so are integration-level tests.")
 	clusterN := 1
@@ -180,6 +190,7 @@ func createSnapshotFile(t *testing.T, kvs []kv) string {
 	cfg.ListenClientUrls, cfg.AdvertiseClientUrls = cURLs, cURLs
 	cfg.ListenPeerUrls, cfg.AdvertisePeerUrls = pURLs, pURLs
 	cfg.InitialCluster = fmt.Sprintf("%s=%s", cfg.Name, pURLs[0].String())
+	cfg.DBType = string(dbtype)
 	srv, err := embed.StartEtcd(cfg)
 	if err != nil {
 		t.Fatal(err)
@@ -208,7 +219,7 @@ func createSnapshotFile(t *testing.T, kvs []kv) string {
 		}
 	}
 
-	sp := snapshot.NewV3(zaptest.NewLogger(t))
+	sp := snapshot.NewV3(zaptest.NewLogger(t), dbtype)
 	dpPath := filepath.Join(t.TempDir(), fmt.Sprintf("snapshot%d.db", time.Now().Nanosecond()))
 	_, err = sp.Save(context.Background(), ccfg, dpPath)
 	if err != nil {
@@ -219,7 +230,7 @@ func createSnapshotFile(t *testing.T, kvs []kv) string {
 
 const testClusterTkn = "tkn"
 
-func restoreCluster(t *testing.T, clusterN int, dbPath string) (
+func restoreCluster(t *testing.T, clusterN int, dbPath string, dbtype backend.DBType) (
 	cURLs []url.URL,
 	pURLs []url.URL,
 	srvs []*embed.Etcd) {
@@ -240,9 +251,10 @@ func restoreCluster(t *testing.T, clusterN int, dbPath string) (
 		cfg.ListenClientUrls, cfg.AdvertiseClientUrls = []url.URL{cURLs[i]}, []url.URL{cURLs[i]}
 		cfg.ListenPeerUrls, cfg.AdvertisePeerUrls = []url.URL{pURLs[i]}, []url.URL{pURLs[i]}
 		cfg.InitialCluster = ics
+		cfg.DBType = string(dbtype)
 
 		sp := snapshot.NewV3(
-			zaptest.NewLogger(t, zaptest.Level(zapcore.InfoLevel)).Named(cfg.Name).Named("sm"))
+			zaptest.NewLogger(t, zaptest.Level(zapcore.InfoLevel)).Named(cfg.Name).Named("sm"), dbtype)
 
 		if err := sp.Restore(snapshot.RestoreConfig{
 			SnapshotPath:        dbPath,
@@ -251,6 +263,7 @@ func restoreCluster(t *testing.T, clusterN int, dbPath string) (
 			PeerURLs:            []string{pURLs[i].String()},
 			InitialCluster:      ics,
 			InitialClusterToken: cfg.InitialClusterToken,
+			DBType:              dbtype,
 		}); err != nil {
 			t.Fatal(err)
 		}

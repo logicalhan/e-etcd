@@ -215,7 +215,6 @@ func TestBackendDefrag(t *testing.T) {
 	tx.Lock()
 	tx.UnsafeCreateBucket(schema.Test)
 	for i := 0; i < backend.DefragLimitForTest()+100; i++ {
-		println("bolt", i)
 		tx.UnsafePut(schema.Test, []byte(fmt.Sprintf("foo_%d", i)), []byte("bar"))
 	}
 	tx.Unlock()

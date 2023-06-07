@@ -42,6 +42,8 @@ type Config struct {
 	ExactIndex bool
 
 	Logger *zap.Logger
+
+	DBType backend.DBType
 }
 
 // Verify performs consistency checks of given etcd data-directory.
@@ -76,7 +78,7 @@ func Verify(cfg Config) error {
 		}
 	}()
 
-	be := backend.NewDefaultBackend(lg, datadir.ToBackendFileName(cfg.DataDir))
+	be := backend.NewDefaultBackend(lg, datadir.ToBackendFileName(cfg.DataDir), &cfg.DBType)
 	defer be.Close()
 
 	snapshot, hardstate, err := validateWal(cfg)

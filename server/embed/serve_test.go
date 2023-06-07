@@ -27,7 +27,7 @@ import (
 func TestStartEtcdWrongToken(t *testing.T) {
 	tdir := t.TempDir()
 
-	cfg := NewConfig()
+	cfg := NewBoltConfig()
 
 	// Similar to function in integration/embed/embed_test.go for setting up Config.
 	urls := newEmbedURLs(2)

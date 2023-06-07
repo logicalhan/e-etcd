@@ -18,6 +18,7 @@ import (
 	"testing"
 	"time"
 
+	"go.etcd.io/etcd/server/v3/storage/backend"
 	betesting "go.etcd.io/etcd/server/v3/storage/backend/testing"
 )
 
@@ -34,28 +35,31 @@ func TestUpgradeDowngrade(t *testing.T) {
 			expectStateAfterUpgrade: map[string]string{"/test": "1"},
 		},
 	}
-	for _, tc := range tcs {
-		t.Run(tc.name, func(t *testing.T) {
-			be, _ := betesting.NewTmpBoltBackend(t, time.Microsecond, 10)
-			defer be.Close()
-			tx := be.BatchTx()
-			if tx == nil {
-				t.Fatal("batch tx is nil")
-			}
-			tx.Lock()
-			defer tx.Unlock()
-			UnsafeCreateMetaBucket(tx)
+	b1, _ := betesting.NewTmpBoltBackend(t, time.Hour, 10000)
+	b2, _ := betesting.NewTmpBadgerBackend(t, time.Hour, 10000)
+	backends := []backend.Backend{b1, b2}
+	for _, b := range backends {
+		for _, tc := range tcs {
+			t.Run(tc.name+"["+string(b.DBType())+"]", func(t *testing.T) {
+				tx := b.BatchTx()
+				if tx == nil {
+					t.Fatal("batch tx is nil")
+				}
+				tx.Lock()
+				defer tx.Unlock()
+				UnsafeCreateMetaBucket(tx)
 
-			_, err := tc.change.upgradeAction().unsafeDo(tx)
-			if err != nil {
-				t.Errorf("Failed to upgrade, err: %v", err)
-			}
-			assertBucketState(t, tx, Meta, tc.expectStateAfterUpgrade)
-			_, err = tc.change.downgradeAction().unsafeDo(tx)
-			if err != nil {
-				t.Errorf("Failed to downgrade, err: %v", err)
-			}
-			assertBucketState(t, tx, Meta, tc.expectStateAfterDowngrade)
-		})
+				_, err := tc.change.upgradeAction().unsafeDo(tx)
+				if err != nil {
+					t.Errorf("Failed to upgrade, err: %v", err)
+				}
+				assertBucketState(t, tx, Meta, tc.expectStateAfterUpgrade)
+				_, err = tc.change.downgradeAction().unsafeDo(tx)
+				if err != nil {
+					t.Errorf("Failed to downgrade, err: %v", err)
+				}
+				assertBucketState(t, tx, Meta, tc.expectStateAfterDowngrade)
+			})
+		}
 	}
 }

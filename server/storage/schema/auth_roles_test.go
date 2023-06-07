@@ -108,27 +108,32 @@ func TestGetAllRoles(t *testing.T) {
 		},
 	}
 	for _, tc := range tcs {
-		t.Run(tc.name, func(t *testing.T) {
-			lg := zaptest.NewLogger(t)
-			be, tmpPath := betesting.NewTmpBoltBackend(t, time.Microsecond, 10)
-			abe := NewAuthBackend(lg, be)
-			abe.CreateAuthBuckets()
+		b1, tmpPath := betesting.NewTmpBoltBackend(t, time.Microsecond, 10)
+		b2, tmpPath2 := betesting.NewTmpBadgerBackend(t, time.Microsecond, 10)
+		backends := []backend.Backend{b1, b2}
+		paths := []string{tmpPath, tmpPath2}
+		for i, be := range backends {
+			t.Run(tc.name+":"+string(be.DBType()), func(t *testing.T) {
+				lg := zaptest.NewLogger(t)
+				abe := NewAuthBackend(lg, be)
+				abe.CreateAuthBuckets()
 
-			tx := abe.BatchTx()
-			tx.Lock()
-			tc.setup(tx)
-			tx.Unlock()
+				tx := abe.BatchTx()
+				tx.Lock()
+				tc.setup(tx)
+				tx.Unlock()
 
-			abe.ForceCommit()
-			be.Close()
+				abe.ForceCommit()
+				be.Close()
+				dbtype := be.DBType()
+				be2 := backend.NewDefaultBackend(lg, paths[i], &dbtype)
+				defer be2.Close()
+				abe2 := NewAuthBackend(lg, be2)
+				users := abe2.GetAllRoles()
 
-			be2 := backend.NewDefaultBackend(lg, tmpPath)
-			defer be2.Close()
-			abe2 := NewAuthBackend(lg, be2)
-			users := abe2.GetAllRoles()
-
-			assert.Equal(t, tc.want, users)
-		})
+				assert.Equal(t, tc.want, users)
+			})
+		}
 	}
 }
 
@@ -205,26 +210,32 @@ func TestGetRole(t *testing.T) {
 		},
 	}
 	for _, tc := range tcs {
-		t.Run(tc.name, func(t *testing.T) {
-			lg := zaptest.NewLogger(t)
-			be, tmpPath := betesting.NewTmpBoltBackend(t, time.Microsecond, 10)
-			abe := NewAuthBackend(lg, be)
-			abe.CreateAuthBuckets()
+		b1, tmpPath := betesting.NewTmpBoltBackend(t, time.Microsecond, 10)
+		b2, tmpPath2 := betesting.NewTmpBadgerBackend(t, time.Microsecond, 10)
+		backends := []backend.Backend{b1, b2}
+		paths := []string{tmpPath, tmpPath2}
+		for i, be := range backends {
+			t.Run(tc.name, func(t *testing.T) {
+				lg := zaptest.NewLogger(t)
 
-			tx := abe.BatchTx()
-			tx.Lock()
-			tc.setup(tx)
-			tx.Unlock()
+				abe := NewAuthBackend(lg, be)
+				abe.CreateAuthBuckets()
 
-			abe.ForceCommit()
-			be.Close()
+				tx := abe.BatchTx()
+				tx.Lock()
+				tc.setup(tx)
+				tx.Unlock()
 
-			be2 := backend.NewDefaultBackend(lg, tmpPath)
-			defer be2.Close()
-			abe2 := NewAuthBackend(lg, be2)
-			users := abe2.GetRole("role1")
+				abe.ForceCommit()
+				be.Close()
+				dbtype := be.DBType()
+				be2 := backend.NewDefaultBackend(lg, paths[i], &dbtype)
+				defer be2.Close()
+				abe2 := NewAuthBackend(lg, be2)
+				users := abe2.GetRole("role1")
 
-			assert.Equal(t, tc.want, users)
-		})
+				assert.Equal(t, tc.want, users)
+			})
+		}
 	}
 }

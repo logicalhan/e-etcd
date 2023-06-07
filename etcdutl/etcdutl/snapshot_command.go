@@ -20,6 +20,7 @@ import (
 
 	"go.etcd.io/etcd/etcdutl/v3/snapshot"
 	"go.etcd.io/etcd/pkg/v3/cobrautl"
+	"go.etcd.io/etcd/server/v3/storage/backend"
 	"go.etcd.io/etcd/server/v3/storage/datadir"
 
 	"github.com/spf13/cobra"
@@ -74,6 +75,8 @@ func NewSnapshotRestoreCommand() *cobra.Command {
 	cmd.Flags().StringVar(&restoreClusterToken, "initial-cluster-token", "etcd-cluster", "Initial cluster token for the etcd cluster during restore bootstrap")
 	cmd.Flags().StringVar(&restorePeerURLs, "initial-advertise-peer-urls", defaultInitialAdvertisePeerURLs, "List of this member's peer URLs to advertise to the rest of the cluster")
 	cmd.Flags().StringVar(&restoreName, "name", defaultName, "Human-readable name for this member")
+	cmd.Flags().StringVar(&dbType, "db-type", "bolt", "e-etcd dbtype")
+
 	cmd.Flags().BoolVar(&skipHashCheck, "skip-hash-check", false, "Ignore snapshot integrity hash value (required if copied from data directory)")
 
 	cmd.MarkFlagDirname("data-dir")
@@ -90,7 +93,7 @@ func SnapshotStatusCommandFunc(cmd *cobra.Command, args []string) {
 	printer := initPrinterFromCmd(cmd)
 
 	lg := GetLogger()
-	sp := snapshot.NewV3(lg)
+	sp := snapshot.NewV3(lg, backend.DBType(dbType))
 	ds, err := sp.Status(args[0])
 	if err != nil {
 		cobrautl.ExitWithError(cobrautl.ExitError, err)
@@ -100,7 +103,7 @@ func SnapshotStatusCommandFunc(cmd *cobra.Command, args []string) {
 
 func snapshotRestoreCommandFunc(_ *cobra.Command, args []string) {
 	SnapshotRestoreCommandFunc(restoreCluster, restoreClusterToken, restoreDataDir, restoreWalDir,
-		restorePeerURLs, restoreName, skipHashCheck, args)
+		restorePeerURLs, restoreName, skipHashCheck, backend.DBType(dbType), args)
 }
 
 func SnapshotRestoreCommandFunc(restoreCluster string,
@@ -110,6 +113,7 @@ func SnapshotRestoreCommandFunc(restoreCluster string,
 	restorePeerURLs string,
 	restoreName string,
 	skipHashCheck bool,
+	dbType backend.DBType,
 	args []string) {
 	if len(args) != 1 {
 		err := fmt.Errorf("snapshot restore requires exactly one argument")
@@ -127,7 +131,7 @@ func SnapshotRestoreCommandFunc(restoreCluster string,
 	}
 
 	lg := GetLogger()
-	sp := snapshot.NewV3(lg)
+	sp := snapshot.NewV3(lg, dbType)
 
 	if err := sp.Restore(snapshot.RestoreConfig{
 		SnapshotPath:        args[0],
@@ -138,6 +142,7 @@ func SnapshotRestoreCommandFunc(restoreCluster string,
 		InitialCluster:      restoreCluster,
 		InitialClusterToken: restoreClusterToken,
 		SkipHashCheck:       skipHashCheck,
+		DBType:              dbType,
 	}); err != nil {
 		cobrautl.ExitWithError(cobrautl.ExitError, err)
 	}

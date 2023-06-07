@@ -192,10 +192,21 @@ func New(bcfg BackendConfig) Backend {
 	return newBackend(bcfg)
 }
 
-func NewDefaultBackend(lg *zap.Logger, path string) Backend {
+func NewDefaultBackend(lg *zap.Logger, path string, dbType *DBType) Backend {
 	bcfg := DefaultBackendConfig(lg)
 	bcfg.Path = path
-	return newBackend(bcfg)
+	bcfg.DBType = dbType
+	switch dbt := *dbType; dbt {
+	case BadgerDB:
+		if db, err := newBadgerBackend(bcfg); err != nil {
+			panic(err)
+		} else {
+			return db
+		}
+	case BoltDB:
+		return newBackend(bcfg)
+	}
+	panic("not recognized db type")
 }
 
 func newBadgerBackend(bcfg BackendConfig) (*backend, error) {

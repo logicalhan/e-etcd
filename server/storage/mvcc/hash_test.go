@@ -28,10 +28,10 @@ import (
 	"go.etcd.io/etcd/server/v3/storage/mvcc/testutil"
 )
 
-// TestHashByRevValue test HashByRevValue values to ensure we don't change the
+// TestHashByRevValueForBolt test HashByRevValue values to ensure we don't change the
 // output which would have catastrophic consequences. Expected output is just
 // hardcoded, so please regenerate it every time you change input parameters.
-func TestHashByRevValue(t *testing.T) {
+func TestHashByRevValueForBolt(t *testing.T) {
 	b, _ := betesting.NewTmpBoltBackend(t, 0, 0)
 	s := NewStore(zaptest.NewLogger(t), b, &lease.FakeLessor{}, StoreConfig{})
 	defer cleanup(s, b)

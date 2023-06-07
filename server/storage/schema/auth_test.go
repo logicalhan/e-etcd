@@ -51,31 +51,36 @@ func TestAuthEnabled(t *testing.T) {
 		},
 	}
 	for _, tc := range tcs {
-		t.Run(tc.name, func(t *testing.T) {
-			lg := zaptest.NewLogger(t)
-			be, tmpPath := betesting.NewTmpBoltBackend(t, time.Microsecond, 10)
-			abe := NewAuthBackend(lg, be)
-			tx := abe.BatchTx()
-			abe.CreateAuthBuckets()
+		b1, tmpPath := betesting.NewTmpBoltBackend(t, time.Microsecond, 10)
+		b2, tmpPath2 := betesting.NewTmpBadgerBackend(t, time.Microsecond, 10)
+		backends := []backend.Backend{b1, b2}
+		paths := []string{tmpPath, tmpPath2}
+		for i, be := range backends {
+			t.Run(tc.name, func(t *testing.T) {
+				lg := zaptest.NewLogger(t)
+				abe := NewAuthBackend(lg, be)
+				tx := abe.BatchTx()
+				abe.CreateAuthBuckets()
 
-			tx.Lock()
-			if !tc.skipSetting {
-				tx.UnsafeSaveAuthEnabled(tc.setEnabled)
-			}
-			tx.Unlock()
-			abe.ForceCommit()
-			be.Close()
+				tx.Lock()
+				if !tc.skipSetting {
+					tx.UnsafeSaveAuthEnabled(tc.setEnabled)
+				}
+				tx.Unlock()
+				abe.ForceCommit()
+				be.Close()
+				dbtype := be.DBType()
+				be2 := backend.NewDefaultBackend(lg, paths[i], &dbtype)
+				defer be2.Close()
+				abe2 := NewAuthBackend(lg, be2)
+				tx = abe2.BatchTx()
+				tx.Lock()
+				defer tx.Unlock()
+				v := tx.UnsafeReadAuthEnabled()
 
-			be2 := backend.NewDefaultBackend(lg, tmpPath)
-			defer be2.Close()
-			abe2 := NewAuthBackend(lg, be2)
-			tx = abe2.BatchTx()
-			tx.Lock()
-			defer tx.Unlock()
-			v := tx.UnsafeReadAuthEnabled()
-
-			assert.Equal(t, tc.wantEnabled, v)
-		})
+				assert.Equal(t, tc.wantEnabled, v)
+			})
+		}
 	}
 }
 
@@ -102,30 +107,35 @@ func TestAuthRevision(t *testing.T) {
 		},
 	}
 	for _, tc := range tcs {
-		t.Run(tc.name, func(t *testing.T) {
-			lg := zaptest.NewLogger(t)
-			be, tmpPath := betesting.NewTmpBoltBackend(t, time.Microsecond, 10)
-			abe := NewAuthBackend(lg, be)
-			abe.CreateAuthBuckets()
+		b1, tmpPath := betesting.NewTmpBoltBackend(t, time.Microsecond, 10)
+		b2, tmpPath2 := betesting.NewTmpBadgerBackend(t, time.Microsecond, 10)
+		backends := []backend.Backend{b1, b2}
+		paths := []string{tmpPath, tmpPath2}
+		for i, be := range backends {
+			t.Run(tc.name, func(t *testing.T) {
+				lg := zaptest.NewLogger(t)
+				abe := NewAuthBackend(lg, be)
+				abe.CreateAuthBuckets()
 
-			if tc.setRevision != 0 {
-				tx := abe.BatchTx()
+				if tc.setRevision != 0 {
+					tx := abe.BatchTx()
+					tx.Lock()
+					tx.UnsafeSaveAuthRevision(tc.setRevision)
+					tx.Unlock()
+				}
+				abe.ForceCommit()
+				be.Close()
+				dbtype := be.DBType()
+				be2 := backend.NewDefaultBackend(lg, paths[i], &dbtype)
+				defer be2.Close()
+				abe2 := NewAuthBackend(lg, be2)
+				tx := abe2.BatchTx()
 				tx.Lock()
-				tx.UnsafeSaveAuthRevision(tc.setRevision)
-				tx.Unlock()
-			}
-			abe.ForceCommit()
-			be.Close()
+				defer tx.Unlock()
+				v := tx.UnsafeReadAuthRevision()
 
-			be2 := backend.NewDefaultBackend(lg, tmpPath)
-			defer be2.Close()
-			abe2 := NewAuthBackend(lg, be2)
-			tx := abe2.BatchTx()
-			tx.Lock()
-			defer tx.Unlock()
-			v := tx.UnsafeReadAuthRevision()
-
-			assert.Equal(t, tc.wantRevision, v)
-		})
+				assert.Equal(t, tc.wantRevision, v)
+			})
+		}
 	}
 }

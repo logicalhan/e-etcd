@@ -80,20 +80,22 @@ func TestValidate(t *testing.T) {
 		},
 	}
 	for _, tc := range tcs {
-		t.Run(tc.name, func(t *testing.T) {
-			lg := zap.NewNop()
-			dataPath := setupBackendData(t, tc.version, tc.overrideKeys)
+		for _, bt := range []backend.DBType{backend.BoltDB, backend.BadgerDB} {
+			t.Run(tc.name+":"+string(bt), func(t *testing.T) {
+				lg := zap.NewNop()
+				dataPath := setupBackendData(t, tc.version, tc.overrideKeys, bt)
 
-			b := backend.NewDefaultBackend(lg, dataPath)
-			defer b.Close()
-			err := Validate(lg, b.ReadTx())
-			if (err != nil) != tc.expectError {
-				t.Errorf("Validate(lg, tx) = %+v, expected error: %v", err, tc.expectError)
-			}
-			if err != nil && err.Error() != tc.expectErrorMsg {
-				t.Errorf("Validate(lg, tx) = %q, expected error message: %q", err, tc.expectErrorMsg)
-			}
-		})
+				b := backend.NewDefaultBackend(lg, dataPath, &bt)
+				defer b.Close()
+				err := Validate(lg, b.ReadTx())
+				if (err != nil) != tc.expectError {
+					t.Errorf("Validate(lg, tx) = %+v, expected error: %v", err, tc.expectError)
+				}
+				if err != nil && err.Error() != tc.expectErrorMsg {
+					t.Errorf("Validate(lg, tx) = %q, expected error message: %q", err, tc.expectErrorMsg)
+				}
+			})
+		}
 	}
 }
 
@@ -202,29 +204,31 @@ func TestMigrate(t *testing.T) {
 		},
 	}
 	for _, tc := range tcs {
-		t.Run(tc.name, func(t *testing.T) {
-			lg := zap.NewNop()
-			dataPath := setupBackendData(t, tc.version, tc.overrideKeys)
-			w, _ := waltesting.NewTmpWAL(t, tc.walEntries)
-			defer w.Close()
-			walVersion, err := wal.ReadWALVersion(w)
-			if err != nil {
-				t.Fatal(err)
-			}
+		for _, bt := range []backend.DBType{backend.BoltDB, backend.BadgerDB} {
+			t.Run(tc.name+":"+string(bt), func(t *testing.T) {
+				lg := zap.NewNop()
+				dataPath := setupBackendData(t, tc.version, tc.overrideKeys, bt)
+				w, _ := waltesting.NewTmpWAL(t, tc.walEntries)
+				defer w.Close()
+				walVersion, err := wal.ReadWALVersion(w)
+				if err != nil {
+					t.Fatal(err)
+				}
 
-			b := backend.NewDefaultBackend(lg, dataPath)
-			defer b.Close()
+				b := backend.NewDefaultBackend(lg, dataPath, &bt)
+				defer b.Close()
 
-			err = Migrate(lg, b.BatchTx(), walVersion, tc.targetVersion)
-			if (err != nil) != tc.expectError {
-				t.Errorf("Migrate(lg, tx, %q) = %+v, expected error: %v", tc.targetVersion, err, tc.expectError)
-			}
-			if err != nil && err.Error() != tc.expectErrorMsg {
-				t.Errorf("Migrate(lg, tx, %q) = %q, expected error message: %q", tc.targetVersion, err, tc.expectErrorMsg)
-			}
-			v := UnsafeReadStorageVersion(b.BatchTx())
-			assert.Equal(t, tc.expectVersion, v)
-		})
+				err = Migrate(lg, b.BatchTx(), walVersion, tc.targetVersion)
+				if (err != nil) != tc.expectError {
+					t.Errorf("Migrate(lg, tx, %q) = %+v, expected error: %v", tc.targetVersion, err, tc.expectError)
+				}
+				if err != nil && err.Error() != tc.expectErrorMsg {
+					t.Errorf("Migrate(lg, tx, %q) = %q, expected error message: %q", tc.targetVersion, err, tc.expectErrorMsg)
+				}
+				v := UnsafeReadStorageVersion(b.BatchTx())
+				assert.Equal(t, tc.expectVersion, v)
+			})
+		}
 	}
 }
 
@@ -252,52 +256,63 @@ func TestMigrateIsReversible(t *testing.T) {
 		},
 	}
 	for _, tc := range tcs {
-		t.Run(tc.initialVersion.String(), func(t *testing.T) {
-			lg := zap.NewNop()
-			dataPath := setupBackendData(t, tc.initialVersion, nil)
 
-			be := backend.NewDefaultBackend(lg, dataPath)
-			defer be.Close()
-			tx := be.BatchTx()
-			tx.Lock()
-			defer tx.Unlock()
-			assertBucketState(t, tx, Meta, tc.state)
-			w, walPath := waltesting.NewTmpWAL(t, nil)
-			walVersion, err := wal.ReadWALVersion(w)
-			if err != nil {
-				t.Fatal(err)
-			}
+		for _, bt := range []backend.DBType{backend.BoltDB, backend.BadgerDB} {
+			t.Run(tc.initialVersion.String()+":"+string(bt), func(t *testing.T) {
+				lg := zap.NewNop()
+				dataPath := setupBackendData(t, tc.initialVersion, nil, bt)
 
-			// Upgrade to current version
-			ver := localBinaryVersion()
-			err = UnsafeMigrate(lg, tx, walVersion, ver)
-			if err != nil {
-				t.Errorf("Migrate(lg, tx, %q) returned error %+v", ver, err)
-			}
-			assert.Equal(t, &ver, UnsafeReadStorageVersion(tx))
+				be := backend.NewDefaultBackend(lg, dataPath, &bt)
+				defer be.Close()
+				tx := be.BatchTx()
+				tx.Lock()
+				defer tx.Unlock()
+				assertBucketState(t, tx, Meta, tc.state)
+				w, walPath := waltesting.NewTmpWAL(t, nil)
+				walVersion, err := wal.ReadWALVersion(w)
+				if err != nil {
+					t.Fatal(err)
+				}
 
-			// Downgrade back to initial version
-			w.Close()
-			w = waltesting.Reopen(t, walPath)
-			defer w.Close()
-			walVersion, err = wal.ReadWALVersion(w)
-			if err != nil {
-				t.Fatal(err)
-			}
-			err = UnsafeMigrate(lg, tx, walVersion, tc.initialVersion)
-			if err != nil {
-				t.Errorf("Migrate(lg, tx, %q) returned error %+v", tc.initialVersion, err)
-			}
+				// Upgrade to current version
+				ver := localBinaryVersion()
+				err = UnsafeMigrate(lg, tx, walVersion, ver)
+				if err != nil {
+					t.Errorf("Migrate(lg, tx, %q) returned error %+v", ver, err)
+				}
+				assert.Equal(t, &ver, UnsafeReadStorageVersion(tx))
 
-			// Assert that all changes were revered
-			assertBucketState(t, tx, Meta, tc.state)
-		})
+				// Downgrade back to initial version
+				w.Close()
+				w = waltesting.Reopen(t, walPath)
+				defer w.Close()
+				walVersion, err = wal.ReadWALVersion(w)
+				if err != nil {
+					t.Fatal(err)
+				}
+				err = UnsafeMigrate(lg, tx, walVersion, tc.initialVersion)
+				if err != nil {
+					t.Errorf("Migrate(lg, tx, %q) returned error %+v", tc.initialVersion, err)
+				}
+
+				// Assert that all changes were revered
+				assertBucketState(t, tx, Meta, tc.state)
+			})
+		}
+
 	}
 }
 
-func setupBackendData(t *testing.T, ver semver.Version, overrideKeys func(tx backend.BatchTx)) string {
+func setupBackendData(t *testing.T, ver semver.Version, overrideKeys func(tx backend.BatchTx), dbType backend.DBType) string {
 	t.Helper()
-	be, tmpPath := betesting.NewTmpBoltBackend(t, time.Microsecond, 10)
+	var be backend.Backend
+	var tmpPath string
+	if dbType == backend.BoltDB {
+		be, tmpPath = betesting.NewTmpBoltBackend(t, time.Microsecond, 10)
+	} else {
+		be, tmpPath = betesting.NewTmpBadgerBackend(t, time.Microsecond, 10)
+	}
+
 	tx := be.BatchTx()
 	if tx == nil {
 		t.Fatal("batch tx is nil")

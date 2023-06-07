@@ -23,6 +23,8 @@ import (
 	"github.com/spf13/cobra"
 	"go.uber.org/zap"
 
+	"go.etcd.io/raft/v3/raftpb"
+
 	"go.etcd.io/etcd/api/v3/etcdserverpb"
 	"go.etcd.io/etcd/client/pkg/v3/fileutil"
 	"go.etcd.io/etcd/client/pkg/v3/types"
@@ -37,7 +39,6 @@ import (
 	"go.etcd.io/etcd/server/v3/storage/wal"
 	"go.etcd.io/etcd/server/v3/storage/wal/walpb"
 	"go.etcd.io/etcd/server/v3/verify"
-	"go.etcd.io/raft/v3/raftpb"
 
 	bolt "go.etcd.io/bbolt"
 )
@@ -48,6 +49,7 @@ var (
 	backupDir    string
 	walDir       string
 	backupWalDir string
+	dbType       string
 )
 
 func NewBackupCommand() *cobra.Command {
@@ -60,6 +62,7 @@ func NewBackupCommand() *cobra.Command {
 	}
 	cmd.Flags().StringVar(&dataDir, "data-dir", "", "Path to the etcd data dir")
 	cmd.Flags().StringVar(&walDir, "wal-dir", "", "Path to the etcd wal dir")
+	cmd.Flags().StringVar(&dbType, "db-type", "bolt", "bolt or badger")
 	cmd.Flags().StringVar(&backupDir, "backup-dir", "", "Path to the backup dir")
 	cmd.Flags().StringVar(&backupWalDir, "backup-wal-dir", "", "Path to the backup wal dir")
 	cmd.Flags().BoolVar(&withV3, "with-v3", true, "Backup v3 backend data. Note -with-v3=false is not supported since etcd v3.6. Please use v3.5.x client as the last supporting this deprecated functionality.")
@@ -134,7 +137,7 @@ func HandleBackup(withV3 bool, srcDir string, destDir string, srcWAL string, des
 
 	walsnap := saveSnap(lg, destSnap, srcSnap, &desired)
 	metadata, state, ents := translateWAL(lg, srcWAL, walsnap)
-	saveDB(lg, destDbPath, srcDbPath, state.Commit, state.Term, &desired)
+	saveBoltDB(lg, destDbPath, srcDbPath, state.Commit, state.Term, &desired)
 
 	neww, err := wal.Create(lg, destWAL, pbutil.MustMarshal(&metadata))
 	if err != nil {
@@ -265,8 +268,8 @@ func raftEntryToNoOp(entry *raftpb.Entry) {
 	*entry = raftpb.Entry{Term: entry.Term, Index: entry.Index, Type: raftpb.EntryNormal, Data: nil}
 }
 
-// saveDB copies the v3 backend and strips cluster information.
-func saveDB(lg *zap.Logger, destDB, srcDB string, idx uint64, term uint64, desired *desiredCluster) {
+// saveBoltDB copies the v3 backend and strips cluster information.
+func saveBoltDB(lg *zap.Logger, destDB, srcDB string, idx uint64, term uint64, desired *desiredCluster) {
 	// open src db to safely copy db state
 	var src *bolt.DB
 	ch := make(chan *bolt.DB, 1)
@@ -303,7 +306,7 @@ func saveDB(lg *zap.Logger, destDB, srcDB string, idx uint64, term uint64, desir
 	}
 
 	// trim membership info
-	be := backend.NewDefaultBackend(lg, destDB)
+	be := backend.NewDefaultBackend(lg, destDB, &backend.BoltDB)
 	defer be.Close()
 	ms := schema.NewMembershipBackend(lg, be)
 	if err := ms.TrimClusterFromBackend(); err != nil {

@@ -47,26 +47,31 @@ func TestScheduledCompact(t *testing.T) {
 		},
 	}
 	for _, tc := range tcs {
-		t.Run(fmt.Sprint(tc.value), func(t *testing.T) {
-			lg := zaptest.NewLogger(t)
-			be, tmpPath := betesting.NewTmpBoltBackend(t, time.Microsecond, 10)
-			tx := be.BatchTx()
-			if tx == nil {
-				t.Fatal("batch tx is nil")
-			}
-			tx.Lock()
-			tx.UnsafeCreateBucket(schema.Meta)
-			UnsafeSetScheduledCompact(tx, tc.value)
-			tx.Unlock()
-			be.ForceCommit()
-			be.Close()
-
-			b := backend.NewDefaultBackend(lg, tmpPath)
-			defer b.Close()
-			v, found := UnsafeReadScheduledCompact(b.BatchTx())
-			assert.Equal(t, true, found)
-			assert.Equal(t, tc.value, v)
-		})
+		b1, p1 := betesting.NewTmpBoltBackend(t, time.Microsecond, 10)
+		b2, p2 := betesting.NewTmpBadgerBackend(t, time.Microsecond, 10)
+		backends := []backend.Backend{b1, b2}
+		paths := []string{p1, p2}
+		for i, be := range backends {
+			t.Run(fmt.Sprint(tc.value)+":"+string(be.DBType()), func(t *testing.T) {
+				lg := zaptest.NewLogger(t)
+				tx := be.BatchTx()
+				if tx == nil {
+					t.Fatal("batch tx is nil")
+				}
+				tx.Lock()
+				tx.UnsafeCreateBucket(schema.Meta)
+				UnsafeSetScheduledCompact(tx, tc.value)
+				tx.Unlock()
+				be.ForceCommit()
+				be.Close()
+				dbtype := be.DBType()
+				b := backend.NewDefaultBackend(lg, paths[i], &dbtype)
+				defer b.Close()
+				v, found := UnsafeReadScheduledCompact(b.BatchTx())
+				assert.Equal(t, true, found)
+				assert.Equal(t, tc.value, v)
+			})
+		}
 	}
 }
 
@@ -89,25 +94,30 @@ func TestFinishedCompact(t *testing.T) {
 		},
 	}
 	for _, tc := range tcs {
-		t.Run(fmt.Sprint(tc.value), func(t *testing.T) {
-			lg := zaptest.NewLogger(t)
-			be, tmpPath := betesting.NewTmpBoltBackend(t, time.Microsecond, 10)
-			tx := be.BatchTx()
-			if tx == nil {
-				t.Fatal("batch tx is nil")
-			}
-			tx.Lock()
-			tx.UnsafeCreateBucket(schema.Meta)
-			UnsafeSetFinishedCompact(tx, tc.value)
-			tx.Unlock()
-			be.ForceCommit()
-			be.Close()
-
-			b := backend.NewDefaultBackend(lg, tmpPath)
-			defer b.Close()
-			v, found := UnsafeReadFinishedCompact(b.BatchTx())
-			assert.Equal(t, true, found)
-			assert.Equal(t, tc.value, v)
-		})
+		b1, p1 := betesting.NewTmpBoltBackend(t, time.Microsecond, 10)
+		b2, p2 := betesting.NewTmpBadgerBackend(t, time.Microsecond, 10)
+		backends := []backend.Backend{b1, b2}
+		paths := []string{p1, p2}
+		for i, be := range backends {
+			t.Run(fmt.Sprint(tc.value)+":"+string(be.DBType()), func(t *testing.T) {
+				lg := zaptest.NewLogger(t)
+				tx := be.BatchTx()
+				if tx == nil {
+					t.Fatal("batch tx is nil")
+				}
+				tx.Lock()
+				tx.UnsafeCreateBucket(schema.Meta)
+				UnsafeSetFinishedCompact(tx, tc.value)
+				tx.Unlock()
+				be.ForceCommit()
+				be.Close()
+				dbtype := be.DBType()
+				b := backend.NewDefaultBackend(lg, paths[i], &dbtype)
+				defer b.Close()
+				v, found := UnsafeReadFinishedCompact(b.BatchTx())
+				assert.Equal(t, true, found)
+				assert.Equal(t, tc.value, v)
+			})
+		}
 	}
 }

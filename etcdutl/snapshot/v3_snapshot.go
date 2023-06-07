@@ -29,6 +29,9 @@ import (
 	"go.uber.org/zap"
 
 	bolt "go.etcd.io/bbolt"
+	"go.etcd.io/raft/v3"
+	"go.etcd.io/raft/v3/raftpb"
+
 	"go.etcd.io/etcd/api/v3/etcdserverpb"
 	"go.etcd.io/etcd/client/pkg/v3/fileutil"
 	"go.etcd.io/etcd/client/pkg/v3/types"
@@ -45,8 +48,6 @@ import (
 	"go.etcd.io/etcd/server/v3/storage/wal"
 	"go.etcd.io/etcd/server/v3/storage/wal/walpb"
 	"go.etcd.io/etcd/server/v3/verify"
-	"go.etcd.io/raft/v3"
-	"go.etcd.io/raft/v3/raftpb"
 )
 
 // Manager defines snapshot methods.
@@ -70,8 +71,8 @@ type Manager interface {
 }
 
 // NewV3 returns a new snapshot Manager for v3.x snapshot.
-func NewV3(lg *zap.Logger) Manager {
-	return &v3Manager{lg: lg}
+func NewV3(lg *zap.Logger, dbtype backend.DBType) Manager {
+	return &v3Manager{lg: lg, dbType: dbtype}
 }
 
 type v3Manager struct {
@@ -82,6 +83,7 @@ type v3Manager struct {
 	walDir    string
 	snapDir   string
 	cl        *membership.RaftCluster
+	dbType    backend.DBType
 
 	skipHashCheck bool
 }
@@ -203,6 +205,8 @@ type RestoreConfig struct {
 	// SkipHashCheck is "true" to ignore snapshot integrity hash value
 	// (required if copied from data directory).
 	SkipHashCheck bool
+
+	DBType backend.DBType
 }
 
 // Restore restores a new etcd data directory from given snapshot file.
@@ -263,8 +267,10 @@ func (s *v3Manager) Restore(cfg RestoreConfig) error {
 	)
 
 	if err = s.saveDB(); err != nil {
+		s.lg.Error("what is this", zap.String("error", err.Error()))
 		return err
 	}
+	println("han han han")
 	hardstate, err := s.saveWALAndSnap()
 	if err != nil {
 		return err
@@ -286,6 +292,7 @@ func (s *v3Manager) Restore(cfg RestoreConfig) error {
 		ExactIndex: true,
 		Logger:     s.lg,
 		DataDir:    dataDir,
+		DBType:     cfg.DBType,
 	})
 }
 
@@ -300,7 +307,7 @@ func (s *v3Manager) saveDB() error {
 		return err
 	}
 
-	be := backend.NewDefaultBackend(s.lg, s.outDbPath())
+	be := backend.NewDefaultBackend(s.lg, s.outDbPath(), &s.dbType)
 	defer be.Close()
 
 	err = schema.NewMembershipBackend(s.lg, be).TrimMembershipFromBackend()
@@ -398,7 +405,7 @@ func (s *v3Manager) saveWALAndSnap() (*raftpb.HardState, error) {
 	// add members again to persist them to the store we create.
 	st := v2store.New(etcdserver.StoreClusterPrefix, etcdserver.StoreKeysPrefix)
 	s.cl.SetStore(st)
-	be := backend.NewDefaultBackend(s.lg, s.outDbPath())
+	be := backend.NewDefaultBackend(s.lg, s.outDbPath(), &s.dbType)
 	defer be.Close()
 	s.cl.SetBackend(schema.NewMembershipBackend(s.lg, be))
 	for _, m := range s.cl.Members() {
@@ -481,7 +488,7 @@ func (s *v3Manager) saveWALAndSnap() (*raftpb.HardState, error) {
 }
 
 func (s *v3Manager) updateCIndex(commit uint64, term uint64) error {
-	be := backend.NewDefaultBackend(s.lg, s.outDbPath())
+	be := backend.NewDefaultBackend(s.lg, s.outDbPath(), &s.dbType)
 	defer be.Close()
 
 	cindex.UpdateConsistentIndexForce(be.BatchTx(), commit, term)

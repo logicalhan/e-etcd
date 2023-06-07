@@ -80,15 +80,15 @@ func TestLockVerify(t *testing.T) {
 
 				b.SetTxPostLockInsideApplyHook(tc.txPostLockInsideApplyHook)
 
-				hasPaniced := handlePanic(func() {
+				hasPanicked := handlePanic(func() {
 					if tc.insideApply {
 						applyEntries(b, tc.lock)
 					} else {
 						tc.lock(b.BatchTx())
 					}
 				}) != nil
-				if hasPaniced != tc.expectPanic {
-					t.Errorf("%v != %v", hasPaniced, tc.expectPanic)
+				if hasPanicked != tc.expectPanic {
+					t.Errorf("%v != %v", hasPanicked, tc.expectPanic)
 				}
 			})
 		}

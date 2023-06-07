@@ -24,6 +24,7 @@ import (
 	clientv3 "go.etcd.io/etcd/client/v3"
 	"go.etcd.io/etcd/server/v3/embed"
 	"go.etcd.io/etcd/server/v3/etcdserver"
+	"go.etcd.io/etcd/server/v3/storage/backend"
 	integration2 "go.etcd.io/etcd/tests/v3/framework/integration"
 )
 
@@ -34,10 +35,12 @@ func TestSnapshotV3RestoreMultiMemberAdd(t *testing.T) {
 	integration2.BeforeTest(t)
 
 	kvs := []kv{{"foo1", "bar1"}, {"foo2", "bar2"}, {"foo3", "bar3"}}
-	dbPath := createSnapshotFile(t, kvs)
+	dbType := backend.BadgerDB
+	dbPath := createSnapshotFile(t, kvs, dbType)
 
 	clusterN := 3
-	cURLs, pURLs, srvs := restoreCluster(t, clusterN, dbPath)
+
+	cURLs, pURLs, srvs := restoreCluster(t, clusterN, dbPath, dbType)
 
 	defer func() {
 		for i := 0; i < clusterN; i++ {

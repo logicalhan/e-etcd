@@ -58,6 +58,7 @@ import (
 	"go.etcd.io/etcd/server/v3/etcdserver/api/v3lock"
 	lockpb "go.etcd.io/etcd/server/v3/etcdserver/api/v3lock/v3lockpb"
 	"go.etcd.io/etcd/server/v3/etcdserver/api/v3rpc"
+	"go.etcd.io/etcd/server/v3/storage/backend"
 	"go.etcd.io/etcd/server/v3/verify"
 	framecfg "go.etcd.io/etcd/tests/v3/framework/config"
 	"go.etcd.io/etcd/tests/v3/framework/testutils"
@@ -174,6 +175,7 @@ type ClusterConfig struct {
 	ExperimentalMaxLearners     int
 	DisableStrictReconfigCheck  bool
 	CorruptCheckTime            time.Duration
+	DBType                      backend.DBType
 }
 
 type Cluster struct {
@@ -265,6 +267,7 @@ func (c *Cluster) mustNewMember(t testutil.TB) *Member {
 		MemberConfig{
 			Name:                        fmt.Sprintf("m%v", memberNumber),
 			MemberNumber:                memberNumber,
+			DBType:                      c.Cfg.DBType,
 			AuthToken:                   c.Cfg.AuthToken,
 			AuthTokenTTL:                c.Cfg.AuthTokenTTL,
 			PeerTLS:                     c.Cfg.PeerTLS,
@@ -615,9 +618,10 @@ type MemberConfig struct {
 	ExperimentalMaxLearners     int
 	DisableStrictReconfigCheck  bool
 	CorruptCheckTime            time.Duration
+	DBType                      backend.DBType
 }
 
-// MustNewMember return an inited member with the given name. If peerTLS is
+// MustNewMember return an initiated member with the given name. If peerTLS is
 // set, it will use https scheme to communicate between peers.
 func MustNewMember(t testutil.TB, mcfg MemberConfig) *Member {
 	var err error
@@ -668,6 +672,12 @@ func MustNewMember(t testutil.TB, mcfg MemberConfig) *Member {
 	m.PreVote = true
 	m.QuotaBackendBytes = mcfg.QuotaBackendBytes
 	m.MaxTxnOps = mcfg.MaxTxnOps
+	if string(mcfg.DBType) == "" {
+		m.DBType = defaultIntegrationDBType
+	} else {
+		m.DBType = mcfg.DBType
+	}
+
 	if m.MaxTxnOps == 0 {
 		m.MaxTxnOps = embed.DefaultMaxTxnOps
 	}
@@ -1217,6 +1227,7 @@ func (m *Member) Close() {
 			Logger:     m.Logger,
 			DataDir:    m.DataDir,
 			ExactIndex: false,
+			DBType:     m.DBType,
 		})
 	}
 	m.Closed = true
@@ -1388,6 +1399,9 @@ func (p SortableMemberSliceByPeerURLs) Swap(i, j int) { p[i], p[j] = p[j], p[i] 
 // NewCluster returns a launched Cluster with a grpc client connection
 // for each Cluster member.
 func NewCluster(t testutil.TB, cfg *ClusterConfig) *Cluster {
+	if string(cfg.DBType) == "" {
+		cfg.DBType = backend.BadgerDB
+	}
 	t.Helper()
 
 	assertInTestContext(t)

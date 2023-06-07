@@ -30,6 +30,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+
 	"go.etcd.io/etcd/client/pkg/v3/testutil"
 	"go.etcd.io/etcd/client/pkg/v3/transport"
 	clientv3 "go.etcd.io/etcd/client/v3"
@@ -213,7 +214,7 @@ func setupEmbedCfg(cfg *embed.Config, curls []url.URL, purls []url.URL) {
 }
 
 func TestEmbedEtcdAutoCompactionRetentionRetained(t *testing.T) {
-	cfg := embed.NewConfig()
+	cfg := embed.NewBoltConfig()
 	urls := newEmbedURLs(false, 2)
 	setupEmbedCfg(cfg, []url.URL{urls[0]}, []url.URL{urls[1]})
 	cfg.Dir = filepath.Join(t.TempDir(), "embed-etcd")

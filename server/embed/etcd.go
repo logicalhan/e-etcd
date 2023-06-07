@@ -42,6 +42,7 @@ import (
 	"go.etcd.io/etcd/server/v3/etcdserver/api/etcdhttp"
 	"go.etcd.io/etcd/server/v3/etcdserver/api/rafthttp"
 	"go.etcd.io/etcd/server/v3/storage"
+	"go.etcd.io/etcd/server/v3/storage/backend"
 	"go.etcd.io/etcd/server/v3/verify"
 
 	grpc_prometheus "github.com/grpc-ecosystem/go-grpc-prometheus"
@@ -168,6 +169,7 @@ func StartEtcd(inCfg *Config) (e *Etcd, err error) {
 
 	srvcfg := config.ServerConfig{
 		Name:                                     cfg.Name,
+		DBType:                                   backend.DBType(cfg.DBType),
 		ClientURLs:                               cfg.AdvertiseClientUrls,
 		PeerURLs:                                 cfg.AdvertisePeerUrls,
 		DataDir:                                  cfg.Dir,
@@ -400,6 +402,7 @@ func (e *Etcd) Close() {
 			Logger:     lg,
 			DataDir:    e.cfg.Dir,
 			ExactIndex: false,
+			DBType:     backend.DBType(e.cfg.DBType),
 		})
 		lg.Sync()
 	}()

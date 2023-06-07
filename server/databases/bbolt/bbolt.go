@@ -123,15 +123,11 @@ func (b *BBoltDB) Begin(writable bool) (interfaces.Tx, error) {
 
 func (b *BBoltDB) GetFromBucket(bucket string, key string) (val []byte) {
 	b.db.View(func(tx *bolt.Tx) error {
-		println(bucket)
 		b := tx.Bucket([]byte(bucket))
 		if b == nil {
-			println("no bucket")
 			return nil
 		}
-		println("found bucket")
 		v := b.Get([]byte(key))
-		println("bucket value", string(v))
 		val = v
 		return nil
 	})
@@ -148,7 +144,6 @@ func (b *BBoltDB) HashBuckets(ignores func(bucketName, keyName []byte) bool) (ui
 			if b == nil {
 				return fmt.Errorf("cannot get hash of bucket %s", string(next))
 			}
-			h.Write(next)
 			b.ForEach(func(k, v []byte) error {
 				if ignores != nil && !ignores(next, k) {
 					h.Write(k)
@@ -204,12 +199,10 @@ func (b *BBoltDB) Defrag(logger *zap.Logger, dbopts interface{}) error {
 		}
 		return err
 	}
-	println("trying to close original db")
 	err = odb.Close()
 	if err != nil {
 		logger.Fatal("failed to close database", zap.Error(err))
 	}
-	println("finished closing original db")
 	err = tmpdb.Close()
 	if err != nil {
 		logger.Fatal("failed to close tmp database", zap.Error(err))

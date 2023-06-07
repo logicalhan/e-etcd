@@ -215,6 +215,8 @@ type EtcdServer struct {
 	term              uint64 // must use atomic operations to access; keep 64-bit aligned.
 	lead              uint64 // must use atomic operations to access; keep 64-bit aligned.
 
+	dbType backend.DBType
+
 	consistIndex cindex.ConsistentIndexer // consistIndex is used to get/set/save consistentIndex
 	r            raftNode                 // uses 64-bit atomics; keep 64-bit aligned.
 
@@ -321,6 +323,7 @@ func NewServer(cfg config.ServerConfig) (srv *EtcdServer, err error) {
 	heartbeat := time.Duration(cfg.TickMs) * time.Millisecond
 	srv = &EtcdServer{
 		readych:               make(chan struct{}),
+		dbType:                cfg.DBType,
 		Cfg:                   cfg,
 		lgMu:                  new(sync.RWMutex),
 		lg:                    cfg.Logger,
@@ -1017,15 +1020,14 @@ func (s *EtcdServer) applySnapshot(ep *etcdProgress, toApply *toApply) {
 	// We do not want to wait on closing the old backend.
 	s.bemu.Lock()
 	oldbe := s.be
-	go func() {
-		lg.Info("closing old backend file")
-		defer func() {
-			lg.Info("closed old backend file")
-		}()
-		if err := oldbe.Close(); err != nil {
-			lg.Panic("failed to close old backend", zap.Error(err))
-		}
+
+	lg.Info("closing old backend file")
+	defer func() {
+		lg.Info("closed old backend file")
 	}()
+	if err := oldbe.Close(); err != nil {
+		lg.Panic("failed to close old backend", zap.Error(err))
+	}
 
 	s.be = newbe
 	s.bemu.Unlock()

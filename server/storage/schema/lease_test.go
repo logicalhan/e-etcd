@@ -87,23 +87,28 @@ func TestLeaseBackend(t *testing.T) {
 	}
 
 	for _, tc := range tcs {
-		t.Run(tc.name, func(t *testing.T) {
-			lg := zaptest.NewLogger(t)
-			be, tmpPath := betesting.NewTmpBoltBackend(t, time.Microsecond, 10)
-			tx := be.BatchTx()
-			tx.Lock()
-			UnsafeCreateLeaseBucket(tx)
-			tc.setup(tx)
-			tx.Unlock()
+		b1, tmpPath := betesting.NewTmpBoltBackend(t, time.Microsecond, 10)
+		b2, tmpPath2 := betesting.NewTmpBadgerBackend(t, time.Microsecond, 10)
+		backends := []backend.Backend{b1, b2}
+		paths := []string{tmpPath, tmpPath2}
+		for i, be := range backends {
+			t.Run(tc.name + ":" + string(be.DBType()), func(t *testing.T) {
+				lg := zaptest.NewLogger(t)
+				tx := be.BatchTx()
+				tx.Lock()
+				UnsafeCreateLeaseBucket(tx)
+				tc.setup(tx)
+				tx.Unlock()
 
-			be.ForceCommit()
-			be.Close()
+				be.ForceCommit()
+				be.Close()
+				dbtype := be.DBType()
+				be2 := backend.NewDefaultBackend(lg, paths[i], &dbtype)
+				defer be2.Close()
+				leases := MustUnsafeGetAllLeases(be2.ReadTx())
 
-			be2 := backend.NewDefaultBackend(lg, tmpPath)
-			defer be2.Close()
-			leases := MustUnsafeGetAllLeases(be2.ReadTx())
-
-			assert.Equal(t, tc.want, leases)
-		})
+				assert.Equal(t, tc.want, leases)
+			})
+		}
 	}
 }

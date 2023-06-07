@@ -41,6 +41,7 @@ import (
 	"go.etcd.io/etcd/server/v3/etcdserver/api/membership"
 	"go.etcd.io/etcd/server/v3/etcdserver/api/v3compactor"
 	"go.etcd.io/etcd/server/v3/etcdserver/api/v3discovery"
+	"go.etcd.io/etcd/server/v3/storage/backend"
 
 	"go.uber.org/multierr"
 	"go.uber.org/zap"
@@ -150,6 +151,7 @@ type Config struct {
 	Name   string `json:"name"`
 	Dir    string `json:"data-dir"`
 	WalDir string `json:"wal-dir"`
+	DBType string `json:"db-type"`
 
 	SnapshotCount uint64 `json:"snapshot-count"`
 
@@ -461,6 +463,17 @@ type securityConfig struct {
 	CertAuth       bool   `json:"client-cert-auth"`
 	TrustedCAFile  string `json:"trusted-ca-file"`
 	AutoTLS        bool   `json:"auto-tls"`
+}
+
+func NewBadgerConfig() *Config {
+	c := NewConfig()
+	c.DBType = string(backend.BadgerDB)
+	return c
+}
+func NewBoltConfig() *Config {
+	c := NewConfig()
+	c.DBType = string(backend.BoltDB)
+	return c
 }
 
 // NewConfig creates a new Config populated with default values.

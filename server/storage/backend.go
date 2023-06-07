@@ -53,7 +53,7 @@ func newBackend(cfg config.ServerConfig, hooks backend.Hooks) backend.Backend {
 	}
 	bcfg.Mlock = cfg.ExperimentalMemoryMlock
 	bcfg.Hooks = hooks
-	bcfg.DBType = &backend.BadgerDB
+	bcfg.DBType = &cfg.DBType
 	return backend.New(bcfg)
 }
 

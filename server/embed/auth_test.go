@@ -23,7 +23,7 @@ import (
 
 func TestEnableAuth(t *testing.T) {
 	tdir := t.TempDir()
-	cfg := NewConfig()
+	cfg := NewBadgerConfig()
 	cfg.Dir = tdir
 	e, err := StartEtcd(cfg)
 	if err != nil {
