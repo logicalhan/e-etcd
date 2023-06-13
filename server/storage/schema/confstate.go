@@ -46,6 +46,9 @@ func UnsafeConfStateFromBackend(lg *zap.Logger, tx backend.ReadTx) *raftpb.ConfS
 	}
 
 	if len(keys) != 1 {
+		for i, k := range keys {
+			lg.Info("key", zap.String("key", string(k)), zap.String("val", string(vals[i])))
+		}
 		lg.Panic(
 			"unexpected number of key: "+string(bucket.MetaConfStateName)+" when getting cluster version from backend",
 			zap.Int("number-of-key", len(keys)),

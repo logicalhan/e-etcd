@@ -30,28 +30,33 @@ import (
 	"os"
 
 	_ "github.com/mattn/go-sqlite3"
-	bolt "go.etcd.io/bbolt"
 	"go.uber.org/zap"
+
+	bolt "go.etcd.io/bbolt"
 
 	"go.etcd.io/etcd/server/v3/interfaces"
 )
 
 const (
-	hasBucketQuery    = `SELECT name FROM sqlite_master WHERE type='table' AND name=?;`
-	queryTableNames   = `SELECT name FROM sqlite_schema WHERE type='table' ORDER BY name;`
-	dropBucketQuery   = `DROP TABLE IF EXISTS ?;`
-	createBucketQuery = "CREATE TABLE IF NOT EXISTS %s (key STRING PRIMARY KEY, value BLOB);"
-	unsafeRangeQuery  = `select key, value from KVs WHERE key >= ? AND key <= ? ORDER BY key limit ?;`
+	hasBucketQuery               = `SELECT name FROM sqlite_master WHERE type='table' AND name=?;`
+	queryTableNames              = `SELECT name FROM sqlite_schema WHERE type='table' ORDER BY name;`
+	dropBucketQuery              = `DROP TABLE IF EXISTS ?;`
+	createBucketQuery            = "CREATE TABLE IF NOT EXISTS %s (key STRING PRIMARY KEY, value BLOB);"
+	unsafeRangeQuery             = `select key, value from KVs WHERE key >= ? AND key <= ? ORDER BY key limit ?;`
+	genericUnsafeRangeQuery      = "select key, value from %s WHERE key >= ? AND key <= ? ORDER BY key limit ?;"
+	genericUnsafeRangeQueryNoEnd = "select key, value from %s WHERE key >= ? ORDER BY key limit ?;"
+	genericGet                   = "SELECT value from %s WHERE key=?;"
+	genericUpsert                = "INSERT INTO %s (key, value) VALUES(?, ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value;"
+	genericDelete                = "DELETE from %s where key = ?;"
+	genericForEach               = "select key, value from %s;"
 
 	sizeQuery = `SELECT (page_count - freelist_count) * page_size as size FROM pragma_page_count(), pragma_freelist_count(), pragma_page_size();`
 	defrag    = `VACUUM;`
 	getKV     = `SELECT value from KVs WHERE key=?;`
-	KVUpsert  = `INSERT INTO KVs (key, value)
+	deleteKV  = `DELETE from KVs where key = ?;`
+	allKV     = `select key, value from KVs;`
+	UpsertKV  = `INSERT INTO KVs (key, value)
   VALUES(?, ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value;`
-)
-
-var (
-	_ = 42
 )
 
 type SqliteDB struct {
@@ -66,6 +71,7 @@ type BackendBucket interface {
 
 func NewSqliteDB[B BackendBucket](dir string, buckets []B) (*SqliteDB, error) {
 	if err := os.MkdirAll(dir, 0755); err != nil {
+		fmt.Printf("couldn't make directory: %s", dir)
 		return nil, err
 	}
 	db, err := sql.Open("sqlite3", dir+"/sqlite.DB")
@@ -166,10 +172,9 @@ func (s *SqliteDB) DeleteBucket(name []byte) error {
 }
 
 func (s *SqliteDB) CreateBucket(s2 string) {
-	// let's
 	tableName := resolveTableName(s2)
-
-	if _, err := s.DB.Exec(fmt.Sprintf(createBucketQuery, tableName)); err != nil {
+	query := fmt.Sprintf(createBucketQuery, tableName)
+	if _, err := s.DB.Exec(query); err != nil {
 		panic(err)
 	}
 }
@@ -296,7 +301,10 @@ func (s *SqliteTx) Bucket(name []byte) interfaces.Bucket {
 
 func (s *SqliteTx) CreateBucket(name []byte) (interfaces.Bucket, error) {
 	tableName := resolveTableName(string(name))
-	_, err := s.tx.Exec(createBucketQuery, tableName)
+	query := fmt.Sprintf(createBucketQuery, tableName)
+	fmt.Println("HAN HAN")
+	fmt.Println(query)
+	_, err := s.tx.Exec(query)
 	if err != nil {
 		return nil, err
 	}
@@ -359,7 +367,8 @@ func (s *SqliteBucket) Writable() bool {
 }
 
 func (s *SqliteBucket) Get(key []byte) []byte {
-	r, err := s.TX.Query(getKV, string(key))
+	query := fmt.Sprintf(genericGet, s.name)
+	r, err := s.TX.Query(query, string(key))
 	defer r.Close()
 	if err != nil {
 		return nil
@@ -379,70 +388,83 @@ func (s *SqliteBucket) Get(key []byte) []byte {
 }
 
 func (s *SqliteBucket) Put(key []byte, value []byte) error {
-	if s.name == "KVs" {
-		_, err := s.TX.Exec(KVUpsert, string(key), value)
-		return err
-	}
-	return nil
+	query := fmt.Sprintf(genericUpsert, s.name)
+	_, err := s.TX.Exec(query, string(key), value)
+	return err
 }
 
 func (s *SqliteBucket) UnsafeRange(key, endKey []byte, limit int64) (keys [][]byte, vs [][]byte) {
-	if s.name == "KVs" {
-		r, err := s.TX.Query(unsafeRangeQuery, string(key), string(endKey), limit)
-		if err != nil {
-			return nil, nil
-		}
+	if endKey == nil {
+		query := fmt.Sprintf(genericGet, s.name)
+		r, err := s.TX.Query(query, string(key))
 		defer r.Close()
-		names := make([][]byte, 0)
-		values := make([][]byte, 0)
-		for r.Next() {
-			var key string
-			var v []byte
-			if err := r.Scan(&key, &v); err != nil {
-				// Check for a scan error.
-				// Query rows will be closed with defer.
-				log.Fatal(err)
-			}
-			names = append(names, []byte(key))
-			values = append(values, v)
+		if err != nil {
+			return
 		}
-		return names, values
+		for r.Next() {
+			var val []byte
+			r.Scan(&val)
+			keys = append(keys, key)
+			vs = append(vs, val)
+			return
+		}
 	}
-	//TODO implement me
-	panic("implement me")
+	var query string
+	var r *sql.Rows
+	var err error
+	if endKey == nil {
+		query = fmt.Sprintf(genericUnsafeRangeQueryNoEnd, s.name)
+		r, err = s.TX.Query(query, string(key), limit)
+	} else {
+		query := fmt.Sprintf(genericUnsafeRangeQuery, s.name)
+		r, err = s.TX.Query(query, string(key), string(endKey), limit)
+	}
+
+	if err != nil {
+		return nil, nil
+	}
+	defer r.Close()
+	names := make([][]byte, 0)
+	values := make([][]byte, 0)
+	for r.Next() {
+		var key string
+		var v []byte
+		if err := r.Scan(&key, &v); err != nil {
+			// Check for a scan error.
+			// Query rows will be closed with defer.
+			log.Fatal(err)
+		}
+		names = append(names, []byte(key))
+		values = append(values, v)
+	}
+	return names, values
 }
 
 func (s *SqliteBucket) Delete(key []byte) error {
-	if s.name == "KVs" {
-		_, err := s.TX.Exec(`DELETE from KVs where key = ?`, string(key))
-		return err
-	}
-	//TODO implement me
-	panic("implement me")
+	query := fmt.Sprintf(genericDelete, s.name)
+	_, err := s.TX.Exec(query, string(key))
+	return err
 }
 
 func (s *SqliteBucket) ForEach(f func(k []byte, v []byte) error) error {
-	if s.name == "KVs" {
-		r, err := s.TX.Query(`select key, value from KVs;`)
-		defer r.Close()
-		if err != nil {
-			return err
-		}
-		for r.Next() {
-			var key string
-			var v []byte
-			if err := r.Scan(&key, &v); err != nil {
-				return err
-			}
-			if err := f([]byte(key), v); err != nil {
-				return err
-			}
-
-		}
+	query := fmt.Sprintf(genericForEach, s.name)
+	r, err := s.TX.Query(query)
+	defer r.Close()
+	if err != nil {
 		return err
 	}
-	//TODO implement me
-	panic("implement me")
+	for r.Next() {
+		var key string
+		var v []byte
+		if err := r.Scan(&key, &v); err != nil {
+			return err
+		}
+		if err := f([]byte(key), v); err != nil {
+			return err
+		}
+
+	}
+	return err
 }
 
 func (s *SqliteBucket) Stats() interface{} {

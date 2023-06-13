@@ -31,7 +31,9 @@ func TestBatchTxPut(t *testing.T) {
 	defer betesting.Close(t, b1)
 	b2, _ := betesting.NewTmpBadgerBackend(t, time.Nanosecond, 10000)
 	defer betesting.Close(t, b2)
-	backends := []backend.Backend{b1, b2}
+	b3, _ := betesting.NewTmpSqliteBackend(t, time.Nanosecond, 10000)
+	defer betesting.Close(t, b3)
+	backends := []backend.Backend{b1, b2, b3}
 	for _, b := range backends {
 
 		tx := b.BatchTx()
@@ -54,6 +56,9 @@ func TestBatchTxPut(t *testing.T) {
 			_, gv := tx.UnsafeRange(bucket2.Test, []byte("foo"), nil, 0)
 
 			tx.Unlock()
+			if len(gv) == 0 {
+				t.Fatalf("no results back from Unsafe Range")
+			}
 			if !reflect.DeepEqual(gv[0], v) {
 				t.Errorf("v = %s, want %s", string(gv[0]), string(v))
 			}

@@ -21,7 +21,9 @@ import (
 
 func UnsafeReadFinishedCompact(tx backend.ReadTx) (finishedComact int64, found bool) {
 	_, finishedCompactBytes := tx.UnsafeRange(bucket.Meta, bucket.FinishedCompactKeyName, nil, 0)
-	if len(finishedCompactBytes) != 0 {
+	// todo(logicalhan) why is sqlite doing this?
+	if len(finishedCompactBytes) != 0 && len(finishedCompactBytes[0]) >= 16 {
+		println(len(finishedCompactBytes[0]))
 		return bytesToRev(finishedCompactBytes[0]).main, true
 	}
 	return 0, false
@@ -29,7 +31,8 @@ func UnsafeReadFinishedCompact(tx backend.ReadTx) (finishedComact int64, found b
 
 func UnsafeReadScheduledCompact(tx backend.ReadTx) (scheduledComact int64, found bool) {
 	_, scheduledCompactBytes := tx.UnsafeRange(bucket.Meta, bucket.ScheduledCompactKeyName, nil, 0)
-	if len(scheduledCompactBytes) != 0 {
+	// todo(logicalhan) why is sqlite doing this?
+	if len(scheduledCompactBytes) != 0 && len(scheduledCompactBytes[0]) >= 16 {
 		return bytesToRev(scheduledCompactBytes[0]).main, true
 	}
 	return 0, false

@@ -181,7 +181,7 @@ func DefaultBackendConfig(lg *zap.Logger) BackendConfig {
 
 func New(bcfg BackendConfig) Backend {
 	if bcfg.DBType == nil {
-		bcfg.DBType = &BoltDB
+		bcfg.DBType = &SQLite
 	}
 	switch dbtype := *bcfg.DBType; dbtype {
 	case BadgerDB:
@@ -225,17 +225,9 @@ func NewDefaultBackend(lg *zap.Logger, path string, dbType *DBType) Backend {
 }
 
 func newSqliteBackend(bcfg BackendConfig) (*backend, error) {
-	opts := badgy.DefaultOptions(bcfg.Path)
-	opts.MetricsEnabled = true
-	//opts.InMemory = false
-	popts := &opts
-	if bcfg.ValuePath != "" {
-		popts.ValueDir = bcfg.ValuePath
-	}
-	popts.BypassLockGuard = true
 	db, err := sqlite.NewSqliteDB(bcfg.Path, bucket.Buckets)
 	if err != nil {
-		println("oh nos", err.Error())
+		println("OH NOZ", err.Error())
 		return nil, err
 	}
 	b := &backend{
@@ -289,7 +281,7 @@ func newBadgerBackend(bcfg BackendConfig) (*backend, error) {
 	popts.ReadOnly = false
 	bdb, err := badgy.Open(*popts)
 	if err != nil {
-		println("oh nos", err.Error())
+		println("OH nos", err.Error())
 		return nil, err
 	}
 	db := badger.NewBadgerDB(bdb, bcfg.Path)

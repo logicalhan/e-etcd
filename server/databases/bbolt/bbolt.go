@@ -25,8 +25,9 @@ import (
 	"os"
 	"path/filepath"
 
-	bolt "go.etcd.io/bbolt"
 	"go.uber.org/zap"
+
+	bolt "go.etcd.io/bbolt"
 
 	"go.etcd.io/etcd/server/v3/interfaces"
 )

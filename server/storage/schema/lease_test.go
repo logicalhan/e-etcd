@@ -92,7 +92,7 @@ func TestLeaseBackend(t *testing.T) {
 		backends := []backend.Backend{b1, b2}
 		paths := []string{tmpPath, tmpPath2}
 		for i, be := range backends {
-			t.Run(tc.name + ":" + string(be.DBType()), func(t *testing.T) {
+			t.Run(tc.name+":"+string(be.DBType()), func(t *testing.T) {
 				lg := zaptest.NewLogger(t)
 				tx := be.BatchTx()
 				tx.Lock()

@@ -938,29 +938,29 @@ type fakeBatchTx struct {
 	rangeRespc chan rangeResp
 }
 
-func (b *fakeBatchTx) LockInsideApply()                         {}
-func (b *fakeBatchTx) LockOutsideApply()                        {}
-func (b *fakeBatchTx) Lock()                                    {}
-func (b *fakeBatchTx) Unlock()                                  {}
-func (b *fakeBatchTx) RLock()                                   {}
-func (b *fakeBatchTx) RUnlock()                                 {}
-func (b *fakeBatchTx) UnsafeCreateBucket(bucket backend.Bucket) {}
-func (b *fakeBatchTx) UnsafeDeleteBucket(bucket backend.Bucket) {}
-func (b *fakeBatchTx) UnsafePut(bucket backend.Bucket, key []byte, value []byte) {
+func (b *fakeBatchTx) LockInsideApply()                        {}
+func (b *fakeBatchTx) LockOutsideApply()                       {}
+func (b *fakeBatchTx) Lock()                                   {}
+func (b *fakeBatchTx) Unlock()                                 {}
+func (b *fakeBatchTx) RLock()                                  {}
+func (b *fakeBatchTx) RUnlock()                                {}
+func (b *fakeBatchTx) UnsafeCreateBucket(bucket bucket.Bucket) {}
+func (b *fakeBatchTx) UnsafeDeleteBucket(bucket bucket.Bucket) {}
+func (b *fakeBatchTx) UnsafePut(bucket bucket.Bucket, key []byte, value []byte) {
 	b.Recorder.Record(testutil.Action{Name: "put", Params: []interface{}{bucket, key, value}})
 }
-func (b *fakeBatchTx) UnsafeSeqPut(bucket backend.Bucket, key []byte, value []byte) {
+func (b *fakeBatchTx) UnsafeSeqPut(bucket bucket.Bucket, key []byte, value []byte) {
 	b.Recorder.Record(testutil.Action{Name: "seqput", Params: []interface{}{bucket, key, value}})
 }
-func (b *fakeBatchTx) UnsafeRange(bucket backend.Bucket, key, endKey []byte, limit int64) (keys [][]byte, vals [][]byte) {
+func (b *fakeBatchTx) UnsafeRange(bucket bucket.Bucket, key, endKey []byte, limit int64) (keys [][]byte, vals [][]byte) {
 	b.Recorder.Record(testutil.Action{Name: "range", Params: []interface{}{bucket, key, endKey, limit}})
 	r := <-b.rangeRespc
 	return r.keys, r.vals
 }
-func (b *fakeBatchTx) UnsafeDelete(bucket backend.Bucket, key []byte) {
+func (b *fakeBatchTx) UnsafeDelete(bucket bucket.Bucket, key []byte) {
 	b.Recorder.Record(testutil.Action{Name: "delete", Params: []interface{}{bucket, key}})
 }
-func (b *fakeBatchTx) UnsafeForEach(bucket backend.Bucket, visitor func(k, v []byte) error) error {
+func (b *fakeBatchTx) UnsafeForEach(bucket bucket.Bucket, visitor func(k, v []byte) error) error {
 	return nil
 }
 func (b *fakeBatchTx) Commit()        {}

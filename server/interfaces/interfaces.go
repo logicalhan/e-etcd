@@ -19,8 +19,9 @@ package interfaces
 import (
 	"io"
 
-	bolt "go.etcd.io/bbolt"
 	"go.uber.org/zap"
+
+	bolt "go.etcd.io/bbolt"
 )
 
 type DB interface {
