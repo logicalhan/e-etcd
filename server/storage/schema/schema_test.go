@@ -27,6 +27,7 @@ import (
 	"go.etcd.io/etcd/api/v3/etcdserverpb"
 	"go.etcd.io/etcd/api/v3/membershippb"
 	"go.etcd.io/etcd/api/v3/version"
+	"go.etcd.io/etcd/server/v3/bucket"
 	"go.etcd.io/etcd/server/v3/storage/backend"
 	betesting "go.etcd.io/etcd/server/v3/storage/backend/testing"
 	"go.etcd.io/etcd/server/v3/storage/wal"
@@ -267,7 +268,7 @@ func TestMigrateIsReversible(t *testing.T) {
 				tx := be.BatchTx()
 				tx.Lock()
 				defer tx.Unlock()
-				assertBucketState(t, tx, Meta, tc.state)
+				assertBucketState(t, tx, bucket.Meta, tc.state)
 				w, walPath := waltesting.NewTmpWAL(t, nil)
 				walVersion, err := wal.ReadWALVersion(w)
 				if err != nil {
@@ -296,7 +297,7 @@ func TestMigrateIsReversible(t *testing.T) {
 				}
 
 				// Assert that all changes were revered
-				assertBucketState(t, tx, Meta, tc.state)
+				assertBucketState(t, tx, bucket.Meta, tc.state)
 			})
 		}
 
@@ -335,7 +336,7 @@ func setupBackendData(t *testing.T, ver semver.Version, overrideKeys func(tx bac
 			MustUnsafeSaveConfStateToBackend(zap.NewNop(), tx, &raftpb.ConfState{})
 			UnsafeUpdateConsistentIndex(tx, 1, 1)
 			UnsafeSetStorageVersion(tx, &version.V3_7)
-			tx.UnsafePut(Meta, []byte("future-key"), []byte(""))
+			tx.UnsafePut(bucket.Meta, []byte("future-key"), []byte(""))
 		default:
 			t.Fatalf("Unsupported storage version")
 		}

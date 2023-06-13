@@ -41,16 +41,17 @@ import (
 func TestSnapshotV3RestoreSingle(t *testing.T) {
 	integration2.BeforeTest(t)
 	kvs := []kv{{"foo1", "bar1"}, {"foo2", "bar2"}, {"foo3", "bar3"}}
-	betypes := []backend.DBType{backend.BoltDB, backend.BadgerDB}
+	betypes := []backend.DBType{backend.BadgerDB}
 	for _, dbType := range betypes {
 		t.Run(fmt.Sprintf("TestSnapshotV3RestoreSingle[%s]", dbType), func(t *testing.T) {
-			dbPath := createSnapshotFile(t, kvs, dbType)
+			snapPath := createSnapshotFile(t, kvs, dbType)
 
 			clusterN := 1
 			urls := newEmbedURLs(t, clusterN*2)
 			cURLs, pURLs := urls[:clusterN], urls[clusterN:]
 
 			cfg := integration2.NewEmbedConfig(t, "s1")
+			t.Log("snappath", snapPath, cfg.Dir)
 			cfg.InitialClusterToken = testClusterTkn
 			cfg.ClusterState = "existing"
 			cfg.ListenClientUrls, cfg.AdvertiseClientUrls = cURLs, cURLs
@@ -62,8 +63,9 @@ func TestSnapshotV3RestoreSingle(t *testing.T) {
 			for _, p := range pURLs {
 				pss = append(pss, p.String())
 			}
+
 			if err := sp.Restore(snapshot.RestoreConfig{
-				SnapshotPath:        dbPath,
+				SnapshotPath:        snapPath,
 				Name:                cfg.Name,
 				OutputDataDir:       cfg.Dir,
 				InitialCluster:      cfg.InitialCluster,

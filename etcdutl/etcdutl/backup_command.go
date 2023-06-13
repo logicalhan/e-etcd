@@ -137,7 +137,11 @@ func HandleBackup(withV3 bool, srcDir string, destDir string, srcWAL string, des
 
 	walsnap := saveSnap(lg, destSnap, srcSnap, &desired)
 	metadata, state, ents := translateWAL(lg, srcWAL, walsnap)
-	saveBoltDB(lg, destDbPath, srcDbPath, state.Commit, state.Term, &desired)
+	if dbType == "bolt" {
+		saveBoltDB(lg, destDbPath, srcDbPath, state.Commit, state.Term, &desired)
+	} else {
+		saveBoltDB(lg, destDbPath, srcDbPath, state.Commit, state.Term, &desired)
+	}
 
 	neww, err := wal.Create(lg, destWAL, pbutil.MustMarshal(&metadata))
 	if err != nil {
@@ -266,6 +270,57 @@ func raftEntryToNoOp(entry *raftpb.Entry) {
 	// They do not cary any change to data-model so its safe to replace entries
 	// to be ignored with them.
 	*entry = raftpb.Entry{Term: entry.Term, Index: entry.Index, Type: raftpb.EntryNormal, Data: nil}
+}
+
+// saveBadgerDB copies the v3 backend and strips cluster information.
+func saveBadgerDB(lg *zap.Logger, destDB, srcDB string, idx uint64, term uint64, desired *desiredCluster) {
+	// open src db to safely copy db state
+	var src *bolt.DB
+	ch := make(chan *bolt.DB, 1)
+	go func() {
+		db, err := bolt.Open(srcDB, 0444, &bolt.Options{ReadOnly: true})
+		if err != nil {
+			lg.Fatal("bolt.Open FAILED", zap.Error(err))
+		}
+		ch <- db
+	}()
+	select {
+	case src = <-ch:
+	case <-time.After(time.Second):
+		lg.Fatal("timed out waiting to acquire lock on", zap.String("srcDB", srcDB))
+	}
+	defer src.Close()
+
+	tx, err := src.Begin(false)
+	if err != nil {
+		lg.Fatal("bbolt.BeginTx failed", zap.Error(err))
+	}
+
+	// copy srcDB to destDB
+	dest, err := os.Create(destDB)
+	if err != nil {
+		lg.Fatal("creation of destination file failed", zap.String("dest", destDB), zap.Error(err))
+	}
+	if _, err := tx.WriteTo(dest); err != nil {
+		lg.Fatal("bbolt write to destination file failed", zap.String("dest", destDB), zap.Error(err))
+	}
+	dest.Close()
+	if err := tx.Rollback(); err != nil {
+		lg.Fatal("bbolt tx.Rollback failed", zap.String("dest", destDB), zap.Error(err))
+	}
+
+	// trim membership info
+	be := backend.NewDefaultBackend(lg, destDB, &backend.BoltDB)
+	defer be.Close()
+	ms := schema.NewMembershipBackend(lg, be)
+	if err := ms.TrimClusterFromBackend(); err != nil {
+		lg.Fatal("bbolt tx.Membership failed", zap.Error(err))
+	}
+
+	raftCluster := membership.NewClusterFromMembers(lg, desired.clusterId, desired.members)
+	raftCluster.SetID(desired.nodeId, desired.clusterId)
+	raftCluster.SetBackend(ms)
+	raftCluster.PushMembershipToStorage()
 }
 
 // saveBoltDB copies the v3 backend and strips cluster information.

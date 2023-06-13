@@ -1018,7 +1018,7 @@ func TestSyncTrigger(t *testing.T) {
 
 // TestSnapshot should snapshot the store and cut the persistent
 func TestSnapshot(t *testing.T) {
-	be, _ := betesting.NewDefaultTmpBackend(t)
+	be, _ := betesting.NewDefaultBadgerTmpBackend(t)
 
 	s := raft.NewMemoryStorage()
 	s.Append([]raftpb.Entry{{Index: 1}})
@@ -1174,7 +1174,7 @@ func TestSnapshotOrdering(t *testing.T) {
 
 // TestTriggerSnap for Applied > SnapshotCount should trigger a SaveSnap event
 func TestTriggerSnap(t *testing.T) {
-	be, tmpPath := betesting.NewDefaultTmpBackend(t)
+	be, tmpPath := betesting.NewDefaultBadgerTmpBackend(t)
 	defer func() {
 		os.RemoveAll(tmpPath)
 	}()
@@ -1265,7 +1265,7 @@ func TestConcurrentApplyAndSnapshotV3(t *testing.T) {
 		storage:     mockstorage.NewStorageRecorder(testdir),
 		raftStorage: rs,
 	})
-	be, _ := betesting.NewDefaultTmpBackend(t)
+	be, _ := betesting.NewDefaultBadgerTmpBackend(t)
 	ci := cindex.NewConsistentIndex(be)
 	s := &EtcdServer{
 		lgMu:         new(sync.RWMutex),

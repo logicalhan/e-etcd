@@ -485,6 +485,7 @@ func NewConfig() *Config {
 	cfg := &Config{
 		MaxSnapFiles: DefaultMaxSnapshots,
 		MaxWalFiles:  DefaultMaxWALs,
+		DBType:       string(backend.BoltDB),
 
 		Name: DefaultName,
 

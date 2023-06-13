@@ -21,9 +21,9 @@ import (
 	"testing"
 	"time"
 
+	bucket2 "go.etcd.io/etcd/server/v3/bucket"
 	"go.etcd.io/etcd/server/v3/storage/backend"
 	betesting "go.etcd.io/etcd/server/v3/storage/backend/testing"
-	"go.etcd.io/etcd/server/v3/storage/schema"
 )
 
 func TestBatchTxPut(t *testing.T) {
@@ -39,11 +39,11 @@ func TestBatchTxPut(t *testing.T) {
 		tx.Lock()
 
 		// create bucket
-		tx.UnsafeCreateBucket(schema.Test)
+		tx.UnsafeCreateBucket(bucket2.Test)
 
 		// put
 		v := []byte("bar")
-		tx.UnsafePut(schema.Test, []byte("foo"), v)
+		tx.UnsafePut(bucket2.Test, []byte("foo"), v)
 
 		tx.Unlock()
 
@@ -51,7 +51,7 @@ func TestBatchTxPut(t *testing.T) {
 		for k := 0; k < 2; k++ {
 			tx := b.BatchTx()
 			tx.Lock()
-			_, gv := tx.UnsafeRange(schema.Test, []byte("foo"), nil, 0)
+			_, gv := tx.UnsafeRange(bucket2.Test, []byte("foo"), nil, 0)
 
 			tx.Unlock()
 			if !reflect.DeepEqual(gv[0], v) {
@@ -74,12 +74,12 @@ func TestBatchTxRange(t *testing.T) {
 		tx.Lock()
 		defer tx.Unlock()
 
-		tx.UnsafeCreateBucket(schema.Test)
+		tx.UnsafeCreateBucket(bucket2.Test)
 		// put keys
 		allKeys := [][]byte{[]byte("foo"), []byte("foo1"), []byte("foo2")}
 		allVals := [][]byte{[]byte("bar"), []byte("bar1"), []byte("bar2")}
 		for i := range allKeys {
-			tx.UnsafePut(schema.Test, allKeys[i], allVals[i])
+			tx.UnsafePut(bucket2.Test, allKeys[i], allVals[i])
 		}
 
 		tests := []struct {
@@ -127,7 +127,7 @@ func TestBatchTxRange(t *testing.T) {
 			},
 		}
 		for i, tt := range tests {
-			ks, vs := tx.UnsafeRange(schema.Test, tt.key, tt.endKey, tt.limit)
+			ks, vs := tx.UnsafeRange(bucket2.Test, tt.key, tt.endKey, tt.limit)
 			keys := []string{}
 			vals := []string{}
 			for j, k := range ks {
@@ -164,17 +164,17 @@ func TestBatchTxDelete(t *testing.T) {
 		tx := b.BatchTx()
 		tx.Lock()
 
-		tx.UnsafeCreateBucket(schema.Test)
-		tx.UnsafePut(schema.Test, []byte("foo"), []byte("bar"))
+		tx.UnsafeCreateBucket(bucket2.Test)
+		tx.UnsafePut(bucket2.Test, []byte("foo"), []byte("bar"))
 
-		tx.UnsafeDelete(schema.Test, []byte("foo"))
+		tx.UnsafeDelete(bucket2.Test, []byte("foo"))
 
 		tx.Unlock()
 
 		// check put result before and after tx is committed
 		for k := 0; k < 2; k++ {
 			tx.Lock()
-			ks, _ := tx.UnsafeRange(schema.Test, []byte("foo"), nil, 0)
+			ks, _ := tx.UnsafeRange(bucket2.Test, []byte("foo"), nil, 0)
 			tx.Unlock()
 			if len(ks) != 0 {
 				keys := []string{}
@@ -198,12 +198,12 @@ func TestBatchTxCommit(t *testing.T) {
 		expectedVal := []byte("bar")
 		tx := b.BatchTx()
 		tx.Lock()
-		tx.UnsafeCreateBucket(schema.Test)
-		tx.UnsafePut(schema.Test, []byte("foo"), expectedVal)
+		tx.UnsafeCreateBucket(bucket2.Test)
+		tx.UnsafePut(bucket2.Test, []byte("foo"), expectedVal)
 		tx.Unlock()
 
 		tx.Commit()
-		val := backend.DbFromBackendForTest(b).GetFromBucket(string(schema.Test.Name()), "foo")
+		val := backend.DbFromBackendForTest(b).GetFromBucket(string(bucket2.Test.Name()), "foo")
 		if !bytes.Equal(val, expectedVal) {
 			t.Errorf("got %s, want %s", val, expectedVal)
 		}
@@ -223,11 +223,11 @@ func TestBatchTxBatchLimitCommit(t *testing.T) {
 			expectedVal := []byte("bar")
 			tx := b.BatchTx()
 			tx.Lock()
-			tx.UnsafeCreateBucket(schema.Test)
-			tx.UnsafePut(schema.Test, []byte("foo"), expectedVal)
+			tx.UnsafeCreateBucket(bucket2.Test)
+			tx.UnsafePut(bucket2.Test, []byte("foo"), expectedVal)
 			tx.Unlock()
 
-			val := backend.DbFromBackendForTest(b).GetFromBucket(string(schema.Test.Name()), "foo")
+			val := backend.DbFromBackendForTest(b).GetFromBucket(string(bucket2.Test.Name()), "foo")
 			if !bytes.Equal(val, expectedVal) {
 				t.Errorf("got %s, want %s", val, expectedVal)
 			}

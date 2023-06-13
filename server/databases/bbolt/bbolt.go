@@ -279,14 +279,6 @@ func (b *BBoltDB) defrag(err error, tmpdb *bolt.DB) (string, *bolt.DB, error, er
 	return dbp, odb, err, nil, false
 }
 
-func (b *BBoltDB) Update(fn interface{}) error {
-	return b.db.Update(fn.(func(*bolt.Tx) error))
-}
-
-func (b *BBoltDB) View(fn interface{}) error {
-	return b.db.View(fn.(func(*bolt.Tx) error))
-}
-
 func (b *BBoltDB) Sync() error {
 	return b.db.Sync()
 }
@@ -309,14 +301,6 @@ func (b *BBoltDB) SetFreelistType(freelistType bolt.FreelistType) {
 
 type BBoltTx struct {
 	tx *bolt.Tx
-}
-
-func (b *BBoltTx) Check() <-chan error {
-	return b.tx.Check()
-}
-
-func (b *BBoltTx) ID() int {
-	return b.tx.ID()
 }
 
 func (b *BBoltTx) DB() interfaces.DB {
@@ -367,10 +351,6 @@ func (b *BBoltTx) ForEach(fn interface{}) error {
 	return b.tx.ForEach(fn.(func(name []byte, b *bolt.Bucket) error))
 }
 
-func (b *BBoltTx) OnCommit(fn interface{}) {
-	b.tx.OnCommit(fn.(func()))
-}
-
 func (b *BBoltTx) Commit() error {
 	return b.tx.Commit()
 }
@@ -385,14 +365,6 @@ func (b *BBoltTx) Copy(w io.Writer) error {
 
 func (b *BBoltTx) WriteTo(w io.Writer) (n int64, err error) {
 	return b.tx.WriteTo(w)
-}
-
-func (b *BBoltTx) CopyFile(path string, mode os.FileMode) error {
-	return b.tx.CopyFile(path, mode)
-}
-
-func (b *BBoltTx) Page(id int) (interface{}, error) {
-	return b.tx.Page(id)
 }
 
 type BBoltBucket struct {
@@ -444,10 +416,6 @@ func (b *BBoltBucket) Bucket(name []byte) interfaces.Bucket {
 	return nil
 }
 
-func (b *BBoltBucket) FillPercent() float64 {
-	return b.bucket.FillPercent
-}
-
 func (b *BBoltBucket) SetFillPercent(fp float64) {
 	b.bucket.FillPercent = fp
 }
@@ -481,18 +449,6 @@ func (b *BBoltBucket) Put(key []byte, value []byte) error {
 
 func (b *BBoltBucket) Delete(key []byte) error {
 	return b.bucket.Delete(key)
-}
-
-func (b *BBoltBucket) Sequence() uint64 {
-	return b.bucket.Sequence()
-}
-
-func (b *BBoltBucket) SetSequence(v uint64) error {
-	return b.bucket.SetSequence(v)
-}
-
-func (b *BBoltBucket) NextSequence() (uint64, error) {
-	return b.bucket.NextSequence()
 }
 
 func (b *BBoltBucket) ForEach(fn func(k []byte, v []byte) error) error {

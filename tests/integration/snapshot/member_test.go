@@ -35,7 +35,7 @@ func TestSnapshotV3RestoreMultiMemberAdd(t *testing.T) {
 	integration2.BeforeTest(t)
 
 	kvs := []kv{{"foo1", "bar1"}, {"foo2", "bar2"}, {"foo3", "bar3"}}
-	dbType := backend.BadgerDB
+	dbType := backend.BoltDB
 	dbPath := createSnapshotFile(t, kvs, dbType)
 
 	clusterN := 3
@@ -67,6 +67,7 @@ func TestSnapshotV3RestoreMultiMemberAdd(t *testing.T) {
 	time.Sleep(testutil.ApplyTimeout)
 
 	cfg := integration2.NewEmbedConfig(t, "3")
+	cfg.DBType = string(dbType)
 	cfg.InitialClusterToken = testClusterTkn
 	cfg.ClusterState = "existing"
 	cfg.ListenClientUrls, cfg.AdvertiseClientUrls = newCURLs, newCURLs

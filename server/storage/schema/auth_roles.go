@@ -18,11 +18,12 @@ import (
 	"go.uber.org/zap"
 
 	"go.etcd.io/etcd/api/v3/authpb"
+	"go.etcd.io/etcd/server/v3/bucket"
 	"go.etcd.io/etcd/server/v3/storage/backend"
 )
 
 func UnsafeCreateAuthRolesBucket(tx backend.BatchTx) {
-	tx.UnsafeCreateBucket(AuthRoles)
+	tx.UnsafeCreateBucket(bucket.AuthRoles)
 }
 
 func (abe *authBackend) GetRole(roleName string) *authpb.Role {
@@ -59,15 +60,15 @@ func (atx *authBatchTx) UnsafePutRole(role *authpb.Role) {
 		)
 	}
 
-	atx.tx.UnsafePut(AuthRoles, role.Name, b)
+	atx.tx.UnsafePut(bucket.AuthRoles, role.Name, b)
 }
 
 func (atx *authBatchTx) UnsafeDeleteRole(rolename string) {
-	atx.tx.UnsafeDelete(AuthRoles, []byte(rolename))
+	atx.tx.UnsafeDelete(bucket.AuthRoles, []byte(rolename))
 }
 
 func (atx *authReadTx) UnsafeGetRole(roleName string) *authpb.Role {
-	_, vs := atx.tx.UnsafeRange(AuthRoles, []byte(roleName), nil, 0)
+	_, vs := atx.tx.UnsafeRange(bucket.AuthRoles, []byte(roleName), nil, 0)
 	if len(vs) == 0 {
 		return nil
 	}
@@ -81,7 +82,7 @@ func (atx *authReadTx) UnsafeGetRole(roleName string) *authpb.Role {
 }
 
 func (atx *authReadTx) UnsafeGetAllRoles() []*authpb.Role {
-	_, vs := atx.tx.UnsafeRange(AuthRoles, []byte{0}, []byte{0xff}, -1)
+	_, vs := atx.tx.UnsafeRange(bucket.AuthRoles, []byte{0}, []byte{0xff}, -1)
 	if len(vs) == 0 {
 		return nil
 	}
