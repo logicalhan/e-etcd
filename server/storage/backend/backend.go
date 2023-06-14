@@ -179,6 +179,16 @@ func DefaultBackendConfig(lg *zap.Logger) BackendConfig {
 	}
 }
 
+func DefaultSqliteConfig(lg *zap.Logger) BackendConfig {
+	return BackendConfig{
+		BatchInterval: defaultBatchInterval,
+		BatchLimit:    defaultBatchLimit,
+		MmapSize:      initialMmapSize,
+		Logger:        lg,
+		DBType:        &SQLite,
+	}
+}
+
 func New(bcfg BackendConfig) Backend {
 	if bcfg.DBType == nil {
 		bcfg.DBType = &SQLite
@@ -237,7 +247,7 @@ func newSqliteBackend(bcfg BackendConfig) (*backend, error) {
 		batchInterval: bcfg.BatchInterval,
 		batchLimit:    bcfg.BatchLimit,
 		mlock:         bcfg.Mlock,
-		dbType:        BadgerDB,
+		dbType:        SQLite,
 
 		readTx: &readTx{
 			baseReadTx: baseReadTx{

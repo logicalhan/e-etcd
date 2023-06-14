@@ -379,10 +379,6 @@ func (b *BBoltBucket) Tx() interfaces.Tx {
 	return nil
 }
 
-func (b *BBoltBucket) Root() interface{} {
-	return b.bucket.Root()
-}
-
 func (b *BBoltBucket) Writable() bool {
 	return b.bucket.Writable()
 }

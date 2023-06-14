@@ -162,7 +162,7 @@ func verifyCheck(t *testing.T, check func() error) {
 }
 
 func execTransaction(t *testing.T, req *pb.RequestOp) {
-	b, _ := betesting.NewDefaultTmpBackend(t)
+	b, _ := betesting.NewDefaultBoltTmpBackend(t)
 	defer betesting.Close(t, b)
 	s := mvcc.NewStore(zaptest.NewLogger(t), b, &lease.FakeLessor{}, mvcc.StoreConfig{})
 	defer s.Close()

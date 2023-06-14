@@ -654,7 +654,7 @@ func TestApplyConfigChangeUpdatesConsistIndex(t *testing.T) {
 	cl.SetStore(v2store.New())
 	cl.AddMember(&membership.Member{ID: types.ID(1)}, true)
 
-	be, _ := betesting.NewDefaultTmpBackend(t)
+	be, _ := betesting.NewDefaultBoltTmpBackend(t)
 	defer betesting.Close(t, be)
 	schema.CreateMetaBucket(be.BatchTx())
 
@@ -1111,7 +1111,7 @@ func TestSnapshotOrdering(t *testing.T) {
 		storage:     p,
 		raftStorage: rs,
 	})
-	be, _ := betesting.NewDefaultTmpBackend(t)
+	be, _ := betesting.NewDefaultBoltTmpBackend(t)
 	ci := cindex.NewConsistentIndex(be)
 	s := &EtcdServer{
 		lgMu:         new(sync.RWMutex),
@@ -1485,7 +1485,7 @@ func TestPublishV3(t *testing.T) {
 	w := wait.NewWithResponse(ch)
 	ctx, cancel := context.WithCancel(context.Background())
 	lg := zaptest.NewLogger(t)
-	be, _ := betesting.NewDefaultTmpBackend(t)
+	be, _ := betesting.NewDefaultBoltTmpBackend(t)
 	srv := &EtcdServer{
 		lgMu:       new(sync.RWMutex),
 		lg:         lg,
@@ -1555,7 +1555,7 @@ func TestPublishV3Retry(t *testing.T) {
 	n := newNodeRecorderStream()
 
 	lg := zaptest.NewLogger(t)
-	be, _ := betesting.NewDefaultTmpBackend(t)
+	be, _ := betesting.NewDefaultBoltTmpBackend(t)
 	srv := &EtcdServer{
 		lgMu:       new(sync.RWMutex),
 		lg:         lg,

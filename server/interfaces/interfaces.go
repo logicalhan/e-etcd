@@ -62,7 +62,6 @@ type Tx interface {
 
 type Bucket interface {
 	Tx() Tx
-	Root() interface{}
 	Writable() bool
 	Get(key []byte) []byte
 	Put(key []byte, value []byte) error

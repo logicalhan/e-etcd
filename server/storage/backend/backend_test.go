@@ -99,7 +99,9 @@ func TestBackendBatchIntervalCommit(t *testing.T) {
 	defer betesting.Close(t, b1)
 	b2, _ := betesting.NewTmpBadgerBackend(t, time.Nanosecond, 10000)
 	defer betesting.Close(t, b2)
-	backends := []backend.Backend{b1, b2}
+	b3, _ := betesting.NewTmpSqliteBackend(t, time.Nanosecond, 10000)
+	defer betesting.Close(t, b3)
+	backends := []backend.Backend{b1, b2, b3}
 	for _, b := range backends {
 		t.Run(fmt.Sprintf("TestBackendBatchIntervalCommit[db=%s]", b.DBType()), func(t *testing.T) {
 			pc := backend.CommitsForTest(b)
@@ -116,7 +118,7 @@ func TestBackendBatchIntervalCommit(t *testing.T) {
 				}
 				time.Sleep(time.Duration(i*100) * time.Millisecond)
 			}
-			val := backend.DbFromBackendForTest(b).GetFromBucket("test", "foo")
+			val := backend.DbFromBackendForTest(b).GetFromBucket(string(bucket2.Test.Name()), "foo")
 			if val == nil {
 				t.Errorf("couldn't find foo in bucket test in backend")
 			} else if !bytes.Equal([]byte("bar"), val) {

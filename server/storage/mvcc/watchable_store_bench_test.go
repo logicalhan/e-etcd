@@ -26,7 +26,7 @@ import (
 )
 
 func BenchmarkWatchableStorePut(b *testing.B) {
-	be, _ := betesting.NewDefaultTmpBackend(b)
+	be, _ := betesting.NewDefaultBoltTmpBackend(b)
 	s := New(zaptest.NewLogger(b), be, &lease.FakeLessor{}, StoreConfig{})
 	defer cleanup(s, be)
 
@@ -46,7 +46,7 @@ func BenchmarkWatchableStorePut(b *testing.B) {
 // with transaction begin and end, where transaction involves
 // some synchronization operations, such as mutex locking.
 func BenchmarkWatchableStoreTxnPut(b *testing.B) {
-	be, _ := betesting.NewDefaultTmpBackend(b)
+	be, _ := betesting.NewDefaultBoltTmpBackend(b)
 	s := New(zaptest.NewLogger(b), be, &lease.FakeLessor{}, StoreConfig{})
 	defer cleanup(s, be)
 
@@ -77,7 +77,7 @@ func BenchmarkWatchableStoreWatchPutUnsync(b *testing.B) {
 }
 
 func benchmarkWatchableStoreWatchPut(b *testing.B, synced bool) {
-	be, _ := betesting.NewDefaultTmpBackend(b)
+	be, _ := betesting.NewDefaultBoltTmpBackend(b)
 	s := newWatchableStore(zaptest.NewLogger(b), be, &lease.FakeLessor{}, StoreConfig{})
 	defer cleanup(s, be)
 
@@ -121,7 +121,7 @@ func benchmarkWatchableStoreWatchPut(b *testing.B, synced bool) {
 // TODO: k is an arbitrary constant. We need to figure out what factor
 // we should put to simulate the real-world use cases.
 func BenchmarkWatchableStoreUnsyncedCancel(b *testing.B) {
-	be, _ := betesting.NewDefaultTmpBackend(b)
+	be, _ := betesting.NewDefaultBoltTmpBackend(b)
 	s := NewStore(zaptest.NewLogger(b), be, &lease.FakeLessor{}, StoreConfig{})
 
 	// manually create watchableStore instead of newWatchableStore
@@ -177,7 +177,7 @@ func BenchmarkWatchableStoreUnsyncedCancel(b *testing.B) {
 }
 
 func BenchmarkWatchableStoreSyncedCancel(b *testing.B) {
-	be, _ := betesting.NewDefaultTmpBackend(b)
+	be, _ := betesting.NewDefaultBoltTmpBackend(b)
 	s := newWatchableStore(zaptest.NewLogger(b), be, &lease.FakeLessor{}, StoreConfig{})
 
 	defer cleanup(s, be)

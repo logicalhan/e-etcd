@@ -180,8 +180,22 @@ func (s *SqliteDB) CreateBucket(s2 string) {
 }
 
 func (s *SqliteDB) GetFromBucket(bucket string, key string) []byte {
-	resolveTableName(bucket)
-
+	tableName := resolveTableName(bucket)
+	query := fmt.Sprintf(genericGet, tableName)
+	r, err := s.DB.Query(query, key)
+	if err != nil {
+		return nil
+	}
+	defer r.Close()
+	var val []byte
+	for r.Next() {
+		if err := r.Scan(&val); err != nil {
+			// Check for a scan error.
+			// Query rows will be closed with defer.
+			log.Fatal(err)
+		}
+		return val
+	}
 	return nil
 }
 
@@ -355,11 +369,6 @@ func (s *SqliteBucket) Tx() interfaces.Tx {
 		dir:      s.dir,
 		writable: s.writable,
 	}
-}
-
-func (s *SqliteBucket) Root() interface{} {
-	//TODO implement me
-	panic("implement me")
 }
 
 func (s *SqliteBucket) Writable() bool {

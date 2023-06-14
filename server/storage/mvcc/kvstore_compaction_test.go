@@ -67,7 +67,7 @@ func TestScheduleCompaction(t *testing.T) {
 		},
 	}
 	for i, tt := range tests {
-		b, _ := betesting.NewDefaultTmpBackend(t)
+		b, _ := betesting.NewDefaultBoltTmpBackend(t)
 		s := NewStore(zaptest.NewLogger(t), b, &lease.FakeLessor{}, StoreConfig{})
 		fi := newFakeIndex()
 		fi.indexCompactRespc <- tt.keep
@@ -107,7 +107,7 @@ func TestScheduleCompaction(t *testing.T) {
 }
 
 func TestCompactAllAndRestore(t *testing.T) {
-	b, _ := betesting.NewDefaultTmpBackend(t)
+	b, _ := betesting.NewDefaultBoltTmpBackend(t)
 	s0 := NewStore(zaptest.NewLogger(t), b, &lease.FakeLessor{}, StoreConfig{})
 	defer b.Close()
 

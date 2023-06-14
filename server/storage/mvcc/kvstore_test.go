@@ -44,7 +44,7 @@ import (
 )
 
 func TestStoreRev(t *testing.T) {
-	b, _ := betesting.NewDefaultTmpBackend(t)
+	b, _ := betesting.NewDefaultBoltTmpBackend(t)
 	s := NewStore(zaptest.NewLogger(t), b, &lease.FakeLessor{}, StoreConfig{})
 	defer s.Close()
 
@@ -434,7 +434,7 @@ func TestRestoreDelete(t *testing.T) {
 	restoreChunkKeys = mrand.Intn(3) + 2
 	defer func() { restoreChunkKeys = oldChunk }()
 
-	b, _ := betesting.NewDefaultTmpBackend(t)
+	b, _ := betesting.NewDefaultBoltTmpBackend(t)
 	s := NewStore(zaptest.NewLogger(t), b, &lease.FakeLessor{}, StoreConfig{})
 	defer b.Close()
 
@@ -485,7 +485,7 @@ func TestRestoreContinueUnfinishedCompaction(t *testing.T) {
 		test := test
 
 		t.Run(test, func(t *testing.T) {
-			b, _ := betesting.NewDefaultTmpBackend(t)
+			b, _ := betesting.NewDefaultBoltTmpBackend(t)
 			s0 := NewStore(zaptest.NewLogger(t), b, &lease.FakeLessor{}, StoreConfig{})
 
 			s0.Put([]byte("foo"), []byte("bar"), lease.NoLease)
@@ -549,7 +549,7 @@ type hashKVResult struct {
 
 // TestHashKVWhenCompacting ensures that HashKV returns correct hash when compacting.
 func TestHashKVWhenCompacting(t *testing.T) {
-	b, _ := betesting.NewDefaultTmpBackend(t)
+	b, _ := betesting.NewDefaultBoltTmpBackend(t)
 	s := NewStore(zaptest.NewLogger(t), b, &lease.FakeLessor{}, StoreConfig{})
 	defer cleanup(s, b)
 
@@ -629,7 +629,7 @@ func TestHashKVWhenCompacting(t *testing.T) {
 // TestHashKVWithCompactedAndFutureRevisions ensures that HashKV returns a correct hash when called
 // with a past revision (lower than compacted), a future revision, and the exact compacted revision
 func TestHashKVWithCompactedAndFutureRevisions(t *testing.T) {
-	b, _ := betesting.NewDefaultTmpBackend(t)
+	b, _ := betesting.NewDefaultBoltTmpBackend(t)
 	s := NewStore(zaptest.NewLogger(t), b, &lease.FakeLessor{}, StoreConfig{})
 	defer cleanup(s, b)
 
@@ -662,7 +662,7 @@ func TestHashKVWithCompactedAndFutureRevisions(t *testing.T) {
 // TestHashKVZeroRevision ensures that "HashByRev(0)" computes
 // correct hash value with latest revision.
 func TestHashKVZeroRevision(t *testing.T) {
-	b, _ := betesting.NewDefaultTmpBackend(t)
+	b, _ := betesting.NewDefaultBoltTmpBackend(t)
 	s := NewStore(zaptest.NewLogger(t), b, &lease.FakeLessor{}, StoreConfig{})
 	defer cleanup(s, b)
 
@@ -695,7 +695,7 @@ func TestTxnPut(t *testing.T) {
 	keys := createBytesSlice(bytesN, sliceN)
 	vals := createBytesSlice(bytesN, sliceN)
 
-	b, _ := betesting.NewDefaultTmpBackend(t)
+	b, _ := betesting.NewDefaultBoltTmpBackend(t)
 	s := NewStore(zaptest.NewLogger(t), b, &lease.FakeLessor{}, StoreConfig{})
 	defer cleanup(s, b)
 
@@ -711,7 +711,7 @@ func TestTxnPut(t *testing.T) {
 
 // TestConcurrentReadNotBlockingWrite ensures Read does not blocking Write after its creation
 func TestConcurrentReadNotBlockingWrite(t *testing.T) {
-	b, _ := betesting.NewDefaultTmpBackend(t)
+	b, _ := betesting.NewDefaultBoltTmpBackend(t)
 	s := NewStore(zaptest.NewLogger(t), b, &lease.FakeLessor{}, StoreConfig{})
 	defer cleanup(s, b)
 
@@ -780,7 +780,7 @@ func TestConcurrentReadTxAndWrite(t *testing.T) {
 		committedKVs         kvs        // committedKVs records the key-value pairs written by the finished Write Txns
 		mu                   sync.Mutex // mu protects committedKVs
 	)
-	b, _ := betesting.NewDefaultTmpBackend(t)
+	b, _ := betesting.NewDefaultBoltTmpBackend(t)
 	s := NewStore(zaptest.NewLogger(t), b, &lease.FakeLessor{}, StoreConfig{})
 	defer cleanup(s, b)
 

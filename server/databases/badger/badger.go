@@ -469,11 +469,6 @@ func (b *BadgerBucket) Tx() interfaces.Tx {
 	return NewBadgerTxn(b.txn, b.db, b.writable)
 }
 
-func (b *BadgerBucket) Root() interface{} {
-	//TODO implement me
-	panic("implement me")
-}
-
 func (b *BadgerBucket) Writable() bool {
 	return b.writable
 }
