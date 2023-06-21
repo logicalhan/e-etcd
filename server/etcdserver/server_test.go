@@ -58,6 +58,7 @@ import (
 	"go.etcd.io/etcd/server/v3/mock/mockstore"
 	"go.etcd.io/etcd/server/v3/mock/mockwait"
 	serverstorage "go.etcd.io/etcd/server/v3/storage"
+	"go.etcd.io/etcd/server/v3/storage/backend"
 	betesting "go.etcd.io/etcd/server/v3/storage/backend/testing"
 	"go.etcd.io/etcd/server/v3/storage/mvcc"
 	"go.etcd.io/etcd/server/v3/storage/schema"
@@ -654,7 +655,7 @@ func TestApplyConfigChangeUpdatesConsistIndex(t *testing.T) {
 	cl.SetStore(v2store.New())
 	cl.AddMember(&membership.Member{ID: types.ID(1)}, true)
 
-	be, _ := betesting.NewDefaultTmpBackend(t)
+	be, _ := betesting.NewDefaultBoltTmpBackend(t)
 	defer betesting.Close(t, be)
 	schema.CreateMetaBucket(be.BatchTx())
 
@@ -1018,7 +1019,7 @@ func TestSyncTrigger(t *testing.T) {
 
 // TestSnapshot should snapshot the store and cut the persistent
 func TestSnapshot(t *testing.T) {
-	be, _ := betesting.NewDefaultTmpBackend(t)
+	be, _ := betesting.NewDefaultBadgerTmpBackend(t)
 
 	s := raft.NewMemoryStorage()
 	s.Append([]raftpb.Entry{{Index: 1}})
@@ -1111,7 +1112,7 @@ func TestSnapshotOrdering(t *testing.T) {
 		storage:     p,
 		raftStorage: rs,
 	})
-	be, _ := betesting.NewDefaultTmpBackend(t)
+	be, _ := betesting.NewDefaultBoltTmpBackend(t)
 	ci := cindex.NewConsistentIndex(be)
 	s := &EtcdServer{
 		lgMu:         new(sync.RWMutex),
@@ -1174,7 +1175,7 @@ func TestSnapshotOrdering(t *testing.T) {
 
 // TestTriggerSnap for Applied > SnapshotCount should trigger a SaveSnap event
 func TestTriggerSnap(t *testing.T) {
-	be, tmpPath := betesting.NewDefaultTmpBackend(t)
+	be, tmpPath := betesting.NewDefaultBadgerTmpBackend(t)
 	defer func() {
 		os.RemoveAll(tmpPath)
 	}()
@@ -1265,12 +1266,13 @@ func TestConcurrentApplyAndSnapshotV3(t *testing.T) {
 		storage:     mockstorage.NewStorageRecorder(testdir),
 		raftStorage: rs,
 	})
-	be, _ := betesting.NewDefaultTmpBackend(t)
+	be, _ := betesting.NewDefaultSqliteTmpBackend(t)
 	ci := cindex.NewConsistentIndex(be)
 	s := &EtcdServer{
 		lgMu:         new(sync.RWMutex),
+		dbType:       "sqlite",
 		lg:           lg,
-		Cfg:          config.ServerConfig{Logger: lg, DataDir: testdir, SnapshotCatchUpEntries: DefaultSnapshotCatchUpEntries},
+		Cfg:          config.ServerConfig{Logger: lg, DataDir: testdir, SnapshotCatchUpEntries: DefaultSnapshotCatchUpEntries, DBType: backend.SQLite},
 		r:            *r,
 		v2store:      st,
 		snapshotter:  snap.New(lg, testdir),
@@ -1485,7 +1487,7 @@ func TestPublishV3(t *testing.T) {
 	w := wait.NewWithResponse(ch)
 	ctx, cancel := context.WithCancel(context.Background())
 	lg := zaptest.NewLogger(t)
-	be, _ := betesting.NewDefaultTmpBackend(t)
+	be, _ := betesting.NewDefaultBoltTmpBackend(t)
 	srv := &EtcdServer{
 		lgMu:       new(sync.RWMutex),
 		lg:         lg,
@@ -1555,7 +1557,7 @@ func TestPublishV3Retry(t *testing.T) {
 	n := newNodeRecorderStream()
 
 	lg := zaptest.NewLogger(t)
-	be, _ := betesting.NewDefaultTmpBackend(t)
+	be, _ := betesting.NewDefaultBoltTmpBackend(t)
 	srv := &EtcdServer{
 		lgMu:       new(sync.RWMutex),
 		lg:         lg,

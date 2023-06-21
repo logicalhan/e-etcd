@@ -124,7 +124,7 @@ func SnapshotRestoreCommandFunc(restoreCluster string,
 	if dataDir == "" {
 		dataDir = restoreName + ".etcd"
 	}
-
+	println("-------------------\n", "restoreDataDir", restoreDataDir, "dataDir", dataDir, "snapshotpath", args[0], "-------------------\n")
 	walDir := restoreWalDir
 	if walDir == "" {
 		walDir = datadir.ToWalDir(dataDir)

@@ -265,8 +265,9 @@ func (s *v3Manager) Restore(cfg RestoreConfig) error {
 		zap.String("data-dir", dataDir),
 		zap.String("snap-dir", s.snapDir),
 	)
-
+	println("han han han")
 	if err = s.saveDB(); err != nil {
+		println("AHHHHHH NO SAVE")
 		s.lg.Error("what is this", zap.String("error", err.Error()))
 		return err
 	}

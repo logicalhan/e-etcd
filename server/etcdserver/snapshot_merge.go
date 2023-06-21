@@ -17,9 +17,10 @@ package etcdserver
 import (
 	"io"
 
+	"go.etcd.io/raft/v3/raftpb"
+
 	"go.etcd.io/etcd/server/v3/etcdserver/api/snap"
 	"go.etcd.io/etcd/server/v3/storage/backend"
-	"go.etcd.io/raft/v3/raftpb"
 
 	humanize "github.com/dustin/go-humanize"
 	"go.uber.org/zap"
@@ -39,9 +40,17 @@ func (s *EtcdServer) createMergedSnapshotMessage(m raftpb.Message, snapt, snapi 
 
 	// commit kv to write metadata(for example: consistent index).
 	s.KV().Commit()
+	var rc io.ReadCloser
 	dbsnap := s.be.Snapshot()
-	// get a snapshot of v3 KV as readCloser
-	rc := newSnapshotReaderCloser(lg, dbsnap)
+	snapsize := dbsnap.Size()
+	println("alalalalalalalal", snapsize)
+	if s.dbType == "bolt" || s.dbType == "sqlite" {
+
+		// get a snapshot of v3 KV as readCloser
+		rc = newSnapshotReaderCloser(lg, dbsnap)
+	} else {
+
+	}
 
 	// put the []byte snapshot of store into raft snapshot and return the merged snapshot with
 	// KV readCloser snapshot.
@@ -57,7 +66,7 @@ func (s *EtcdServer) createMergedSnapshotMessage(m raftpb.Message, snapt, snapi 
 
 	verifySnapshotIndex(snapshot, s.consistIndex.ConsistentIndex())
 
-	return *snap.NewMessage(m, rc, dbsnap.Size())
+	return *snap.NewMessage(m, rc, snapsize)
 }
 
 func newSnapshotReaderCloser(lg *zap.Logger, snapshot backend.Snapshot) io.ReadCloser {

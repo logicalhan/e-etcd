@@ -36,7 +36,7 @@ import (
 )
 
 func TestReadonlyTxnError(t *testing.T) {
-	b, _ := betesting.NewDefaultTmpBackend(t)
+	b, _ := betesting.NewDefaultBoltTmpBackend(t)
 	defer betesting.Close(t, b)
 	s := mvcc.NewStore(zaptest.NewLogger(t), b, &lease.FakeLessor{}, mvcc.StoreConfig{})
 	defer s.Close()
@@ -68,7 +68,7 @@ func TestReadonlyTxnError(t *testing.T) {
 }
 
 func TestWriteTxnPanic(t *testing.T) {
-	b, _ := betesting.NewDefaultTmpBackend(t)
+	b, _ := betesting.NewDefaultBoltTmpBackend(t)
 	defer betesting.Close(t, b)
 	s := mvcc.NewStore(zaptest.NewLogger(t), b, &lease.FakeLessor{}, mvcc.StoreConfig{})
 	defer s.Close()
@@ -102,7 +102,7 @@ func TestWriteTxnPanic(t *testing.T) {
 }
 
 func TestCheckTxnAuth(t *testing.T) {
-	be, _ := betesting.NewDefaultTmpBackend(t)
+	be, _ := betesting.NewDefaultBoltTmpBackend(t)
 	defer betesting.Close(t, be)
 	as := setupAuth(t, be)
 

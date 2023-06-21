@@ -26,8 +26,10 @@ import (
 
 	bolt "go.etcd.io/bbolt"
 
+	"go.etcd.io/etcd/server/v3/bucket"
 	"go.etcd.io/etcd/server/v3/databases/badger"
 	"go.etcd.io/etcd/server/v3/databases/bbolt"
+	"go.etcd.io/etcd/server/v3/databases/sqlite"
 	"go.etcd.io/etcd/server/v3/interfaces"
 )
 
@@ -177,13 +179,29 @@ func DefaultBackendConfig(lg *zap.Logger) BackendConfig {
 	}
 }
 
+func DefaultSqliteConfig(lg *zap.Logger) BackendConfig {
+	return BackendConfig{
+		BatchInterval: defaultBatchInterval,
+		BatchLimit:    defaultBatchLimit,
+		MmapSize:      initialMmapSize,
+		Logger:        lg,
+		DBType:        &SQLite,
+	}
+}
+
 func New(bcfg BackendConfig) Backend {
 	if bcfg.DBType == nil {
-		bcfg.DBType = &BoltDB
+		bcfg.DBType = &SQLite
 	}
 	switch dbtype := *bcfg.DBType; dbtype {
 	case BadgerDB:
 		db, err := newBadgerBackend(bcfg)
+		if err != nil {
+			panic(err)
+		}
+		return db
+	case SQLite:
+		db, err := newSqliteBackend(bcfg)
 		if err != nil {
 			panic(err)
 		}
@@ -205,21 +223,76 @@ func NewDefaultBackend(lg *zap.Logger, path string, dbType *DBType) Backend {
 		}
 	case BoltDB:
 		return newBackend(bcfg)
+	case SQLite:
+		println("sqlite sqlite")
+		if db, err := newSqliteBackend(bcfg); err != nil {
+			panic(err)
+		} else {
+			return db
+		}
 	}
 	panic("not recognized db type")
+}
+
+func newSqliteBackend(bcfg BackendConfig) (*backend, error) {
+	println("here i am, new sqlite", bcfg.Path)
+	db, err := sqlite.NewSqliteDB(bcfg.Path, bucket.Buckets...)
+	if err != nil {
+		println("OH NOZ", err.Error())
+		return nil, err
+	}
+	b := &backend{
+		bopts: nil,
+		db:    db,
+
+		batchInterval: bcfg.BatchInterval,
+		batchLimit:    bcfg.BatchLimit,
+		mlock:         bcfg.Mlock,
+		dbType:        SQLite,
+
+		readTx: &readTx{
+			baseReadTx: baseReadTx{
+				buf: txReadBuffer{
+					txBuffer:   txBuffer{make(map[bucket.BucketID]*bucketBuffer)},
+					bufVersion: 0,
+				},
+				buckets: make(map[bucket.BucketID]interfaces.Bucket),
+				txWg:    new(sync.WaitGroup),
+				txMu:    new(sync.RWMutex),
+			},
+		},
+		txReadBufferCache: txReadBufferCache{
+			mu:         sync.Mutex{},
+			bufVersion: 0,
+			buf:        nil,
+		},
+
+		stopc: make(chan struct{}),
+		donec: make(chan struct{}),
+
+		lg: bcfg.Logger,
+	}
+	b.batchTx = newBatchTxBuffered(b)
+	// We set it after newBatchTxBuffered to skip the 'empty' commit.
+	b.hooks = bcfg.Hooks
+
+	go b.run()
+	return b, nil
 }
 
 func newBadgerBackend(bcfg BackendConfig) (*backend, error) {
 	opts := badgy.DefaultOptions(bcfg.Path)
 	opts.MetricsEnabled = true
-	opts.InMemory = false
+	//opts.InMemory = false
 	popts := &opts
 	if bcfg.ValuePath != "" {
 		popts.ValueDir = bcfg.ValuePath
 	}
-
+	popts.BypassLockGuard = true
+	popts.ReadOnly = false
 	bdb, err := badgy.Open(*popts)
 	if err != nil {
+		println("OH nos", err.Error())
 		return nil, err
 	}
 	db := badger.NewBadgerDB(bdb, bcfg.Path)
@@ -235,10 +308,10 @@ func newBadgerBackend(bcfg BackendConfig) (*backend, error) {
 		readTx: &readTx{
 			baseReadTx: baseReadTx{
 				buf: txReadBuffer{
-					txBuffer:   txBuffer{make(map[BucketID]*bucketBuffer)},
+					txBuffer:   txBuffer{make(map[bucket.BucketID]*bucketBuffer)},
 					bufVersion: 0,
 				},
-				buckets: make(map[BucketID]interfaces.Bucket),
+				buckets: make(map[bucket.BucketID]interfaces.Bucket),
 				txWg:    new(sync.WaitGroup),
 				txMu:    new(sync.RWMutex),
 			},
@@ -291,10 +364,10 @@ func newBackend(bcfg BackendConfig) *backend {
 		readTx: &readTx{
 			baseReadTx: baseReadTx{
 				buf: txReadBuffer{
-					txBuffer:   txBuffer{make(map[BucketID]*bucketBuffer)},
+					txBuffer:   txBuffer{make(map[bucket.BucketID]*bucketBuffer)},
 					bufVersion: 0,
 				},
-				buckets: make(map[BucketID]interfaces.Bucket),
+				buckets: make(map[bucket.BucketID]interfaces.Bucket),
 				txWg:    new(sync.WaitGroup),
 				txMu:    new(sync.RWMutex),
 			},
@@ -474,7 +547,7 @@ func (b *backend) Hash(ignores func(bucketName, keyName []byte) bool) (uint32, e
 }
 
 func (b *backend) Size() int64 {
-	if b.DBType() == "badger" {
+	if b.DBType() == "badger" || b.DBType() == "sqlite" {
 		return b.db.Size()
 	} else if b.DBType() == "bolt" {
 		return atomic.LoadInt64(&b.size)
@@ -541,7 +614,7 @@ func (b *backend) Defrag() error {
 
 	b.batchTx.tx = nil
 
-	if b.DBType() == "badger" {
+	if b.DBType() == "badger" || b.DBType() == "sqlite" {
 		size := b.db.Size()
 		atomic.StoreInt64(&b.size, size)
 		atomic.StoreInt64(&b.sizeInUse, size)

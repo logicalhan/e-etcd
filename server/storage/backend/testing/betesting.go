@@ -52,8 +52,26 @@ func NewTmpBadgerBackend(t testing.TB, batchInterval time.Duration, batchLimit i
 	return NewTmpBackendFromCfg(t, &bcfg)
 }
 
-func NewDefaultTmpBackend(t testing.TB) (backend.Backend, string) {
+func NewTmpSqliteBackend(t testing.TB, batchInterval time.Duration, batchLimit int) (backend.Backend, string) {
+	bcfg := backend.DefaultSqliteConfig(zaptest.NewLogger(t))
+	bcfg.BatchInterval, bcfg.BatchLimit = batchInterval, batchLimit
+	return NewTmpBackendFromCfg(t, &bcfg)
+}
+
+func NewDefaultBadgerTmpBackend(t testing.TB) (backend.Backend, string) {
 	bcfg := backend.DefaultBackendConfig(zaptest.NewLogger(t))
+	bcfg.DBType = &backend.BadgerDB
+	return NewTmpBackendFromCfg(t, &bcfg)
+}
+
+func NewDefaultSqliteTmpBackend(t testing.TB) (backend.Backend, string) {
+	bcfg := backend.DefaultSqliteConfig(zaptest.NewLogger(t))
+	return NewTmpBackendFromCfg(t, &bcfg)
+}
+
+func NewDefaultBoltTmpBackend(t testing.TB) (backend.Backend, string) {
+	bcfg := backend.DefaultBackendConfig(zaptest.NewLogger(t))
+	bcfg.DBType = &backend.BoltDB
 	return NewTmpBackendFromCfg(t, &bcfg)
 }
 

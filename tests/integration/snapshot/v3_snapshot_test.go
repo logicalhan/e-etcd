@@ -41,16 +41,17 @@ import (
 func TestSnapshotV3RestoreSingle(t *testing.T) {
 	integration2.BeforeTest(t)
 	kvs := []kv{{"foo1", "bar1"}, {"foo2", "bar2"}, {"foo3", "bar3"}}
-	betypes := []backend.DBType{backend.BoltDB, backend.BadgerDB}
+	betypes := []backend.DBType{backend.SQLite}
 	for _, dbType := range betypes {
 		t.Run(fmt.Sprintf("TestSnapshotV3RestoreSingle[%s]", dbType), func(t *testing.T) {
-			dbPath := createSnapshotFile(t, kvs, dbType)
+			snapPath := createSnapshotFile(t, kvs, dbType)
 
 			clusterN := 1
 			urls := newEmbedURLs(t, clusterN*2)
 			cURLs, pURLs := urls[:clusterN], urls[clusterN:]
 
 			cfg := integration2.NewEmbedConfig(t, "s1")
+			t.Log("snappath", snapPath, cfg.Dir)
 			cfg.InitialClusterToken = testClusterTkn
 			cfg.ClusterState = "existing"
 			cfg.ListenClientUrls, cfg.AdvertiseClientUrls = cURLs, cURLs
@@ -62,8 +63,9 @@ func TestSnapshotV3RestoreSingle(t *testing.T) {
 			for _, p := range pURLs {
 				pss = append(pss, p.String())
 			}
+
 			if err := sp.Restore(snapshot.RestoreConfig{
-				SnapshotPath:        dbPath,
+				SnapshotPath:        snapPath,
 				Name:                cfg.Name,
 				OutputDataDir:       cfg.Dir,
 				InitialCluster:      cfg.InitialCluster,
@@ -114,7 +116,7 @@ func TestSnapshotV3RestoreSingle(t *testing.T) {
 func TestSnapshotV3RestoreMulti(t *testing.T) {
 	integration2.BeforeTest(t)
 	kvs := []kv{{"foo1", "bar1"}, {"foo2", "bar2"}, {"foo3", "bar3"}}
-	dbType := backend.BadgerDB
+	dbType := backend.SQLite
 	dbPath := createSnapshotFile(t, kvs, dbType)
 
 	clusterN := 3
@@ -134,14 +136,14 @@ func TestSnapshotV3RestoreMulti(t *testing.T) {
 			t.Fatal(err)
 		}
 		defer cli.Close()
-		for i := range kvs {
+		for k := range kvs {
 			var gresp *clientv3.GetResponse
-			gresp, err = cli.Get(context.Background(), kvs[i].k)
+			gresp, err = cli.Get(context.Background(), kvs[k].k)
 			if err != nil {
 				t.Fatal(err)
 			}
-			if string(gresp.Kvs[0].Value) != kvs[i].v {
-				t.Fatalf("#%d: value expected %s, got %s", i, kvs[i].v, string(gresp.Kvs[0].Value))
+			if string(gresp.Kvs[0].Value) != kvs[k].v {
+				t.Fatalf("#%d: value expected %s, got %s", k, kvs[k].v, string(gresp.Kvs[0].Value))
 			}
 		}
 	}

@@ -24,6 +24,7 @@ import (
 
 	"go.etcd.io/bbolt"
 
+	"go.etcd.io/etcd/server/v3/bucket"
 	"go.etcd.io/etcd/server/v3/storage/backend"
 	betesting "go.etcd.io/etcd/server/v3/storage/backend/testing"
 )
@@ -64,7 +65,7 @@ func TestVersion(t *testing.T) {
 				t.Fatal("batch tx is nil")
 			}
 			tx.Lock()
-			tx.UnsafeCreateBucket(Meta)
+			tx.UnsafeCreateBucket(bucket.Meta)
 			UnsafeSetStorageVersion(tx, semver.New(tc.version))
 			tx.Unlock()
 			be.ForceCommit()
@@ -110,7 +111,7 @@ func TestVersionSnapshot(t *testing.T) {
 				t.Fatal("batch tx is nil")
 			}
 			tx.Lock()
-			tx.UnsafeCreateBucket(Meta)
+			tx.UnsafeCreateBucket(bucket.Meta)
 			UnsafeSetStorageVersion(tx, semver.New(tc.version))
 			tx.Unlock()
 			be.ForceCommit()

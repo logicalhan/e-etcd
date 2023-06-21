@@ -18,6 +18,7 @@ import (
 	"math"
 	"sync"
 
+	"go.etcd.io/etcd/server/v3/bucket"
 	"go.etcd.io/etcd/server/v3/interfaces"
 )
 
@@ -31,8 +32,8 @@ type ReadTx interface {
 	RLock()
 	RUnlock()
 
-	UnsafeRange(bucket Bucket, key, endKey []byte, limit int64) (keys [][]byte, vals [][]byte)
-	UnsafeForEach(bucket Bucket, visitor func(k, v []byte) error) error
+	UnsafeRange(bucket bucket.Bucket, key, endKey []byte, limit int64) (keys [][]byte, vals [][]byte)
+	UnsafeForEach(bucket bucket.Bucket, visitor func(k, v []byte) error) error
 }
 
 // Base type for readTx and concurrentReadTx to eliminate duplicate functions between these
@@ -45,12 +46,12 @@ type baseReadTx struct {
 	// txMu protects accesses to buckets and tx on Range requests.
 	txMu    *sync.RWMutex
 	tx      interfaces.Tx
-	buckets map[BucketID]interfaces.Bucket
+	buckets map[bucket.BucketID]interfaces.Bucket
 	// txWg protects tx from being rolled back at the end of a batch interval until all reads using this tx are done.
 	txWg *sync.WaitGroup
 }
 
-func (baseReadTx *baseReadTx) UnsafeForEach(bucket Bucket, visitor func(k, v []byte) error) error {
+func (baseReadTx *baseReadTx) UnsafeForEach(bucket bucket.Bucket, visitor func(k, v []byte) error) error {
 	dups := make(map[string]struct{})
 	getDups := func(k, v []byte) error {
 		dups[string(k)] = struct{}{}
@@ -74,7 +75,7 @@ func (baseReadTx *baseReadTx) UnsafeForEach(bucket Bucket, visitor func(k, v []b
 	return baseReadTx.buf.ForEach(bucket, visitor)
 }
 
-func (baseReadTx *baseReadTx) UnsafeRange(bucketType Bucket, key, endKey []byte, limit int64) ([][]byte, [][]byte) {
+func (baseReadTx *baseReadTx) UnsafeRange(bucketType bucket.Bucket, key, endKey []byte, limit int64) ([][]byte, [][]byte) {
 	if endKey == nil {
 		// forbid duplicates for single keys
 		limit = 1
@@ -130,7 +131,7 @@ func (rt *readTx) RUnlock() { rt.mu.RUnlock() }
 
 func (rt *readTx) reset() {
 	rt.buf.reset()
-	rt.buckets = make(map[BucketID]interfaces.Bucket)
+	rt.buckets = make(map[bucket.BucketID]interfaces.Bucket)
 	rt.tx = nil
 	rt.txWg = new(sync.WaitGroup)
 }

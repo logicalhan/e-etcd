@@ -29,7 +29,7 @@ import (
 )
 
 func BenchmarkStorePut(b *testing.B) {
-	be, _ := betesting.NewDefaultTmpBackend(b)
+	be, _ := betesting.NewDefaultBoltTmpBackend(b)
 	s := NewStore(zaptest.NewLogger(b), be, &lease.FakeLessor{}, StoreConfig{})
 	defer cleanup(s, be)
 
@@ -48,7 +48,7 @@ func BenchmarkStoreRangeKey1(b *testing.B)   { benchmarkStoreRange(b, 1) }
 func BenchmarkStoreRangeKey100(b *testing.B) { benchmarkStoreRange(b, 100) }
 
 func benchmarkStoreRange(b *testing.B, n int) {
-	be, _ := betesting.NewDefaultTmpBackend(b)
+	be, _ := betesting.NewDefaultBoltTmpBackend(b)
 	s := NewStore(zaptest.NewLogger(b), be, &lease.FakeLessor{}, StoreConfig{})
 	defer cleanup(s, be)
 
@@ -75,7 +75,7 @@ func benchmarkStoreRange(b *testing.B, n int) {
 }
 
 func BenchmarkConsistentIndex(b *testing.B) {
-	be, _ := betesting.NewDefaultTmpBackend(b)
+	be, _ := betesting.NewDefaultBoltTmpBackend(b)
 	ci := cindex.NewConsistentIndex(be)
 	defer betesting.Close(b, be)
 
@@ -97,7 +97,7 @@ func BenchmarkConsistentIndex(b *testing.B) {
 
 // BenchmarkStorePutUpdate is same as above, but instead updates single key
 func BenchmarkStorePutUpdate(b *testing.B) {
-	be, _ := betesting.NewDefaultTmpBackend(b)
+	be, _ := betesting.NewDefaultBoltTmpBackend(b)
 	s := NewStore(zaptest.NewLogger(b), be, &lease.FakeLessor{}, StoreConfig{})
 	defer cleanup(s, be)
 
@@ -115,7 +115,7 @@ func BenchmarkStorePutUpdate(b *testing.B) {
 // with transaction begin and end, where transaction involves
 // some synchronization operations, such as mutex locking.
 func BenchmarkStoreTxnPut(b *testing.B) {
-	be, _ := betesting.NewDefaultTmpBackend(b)
+	be, _ := betesting.NewDefaultBoltTmpBackend(b)
 	s := NewStore(zaptest.NewLogger(b), be, &lease.FakeLessor{}, StoreConfig{})
 	defer cleanup(s, be)
 
@@ -135,7 +135,7 @@ func BenchmarkStoreTxnPut(b *testing.B) {
 
 // benchmarkStoreRestore benchmarks the restore operation
 func benchmarkStoreRestore(revsPerKey int, b *testing.B) {
-	be, _ := betesting.NewDefaultTmpBackend(b)
+	be, _ := betesting.NewDefaultBoltTmpBackend(b)
 	s := NewStore(zaptest.NewLogger(b), be, &lease.FakeLessor{}, StoreConfig{})
 	// use closure to capture 's' to pick up the reassignment
 	defer func() { cleanup(s, be) }()

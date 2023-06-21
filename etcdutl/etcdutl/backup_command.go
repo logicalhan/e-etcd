@@ -15,7 +15,6 @@
 package etcdutl
 
 import (
-	"os"
 	"path"
 	"regexp"
 	"time"
@@ -30,6 +29,8 @@ import (
 	"go.etcd.io/etcd/client/pkg/v3/types"
 	"go.etcd.io/etcd/pkg/v3/idutil"
 	"go.etcd.io/etcd/pkg/v3/pbutil"
+	"go.etcd.io/etcd/server/v3/databases/bbolt"
+	"go.etcd.io/etcd/server/v3/databases/sqlite"
 	"go.etcd.io/etcd/server/v3/etcdserver/api/membership"
 	"go.etcd.io/etcd/server/v3/etcdserver/api/snap"
 	"go.etcd.io/etcd/server/v3/etcdserver/api/v2store"
@@ -62,7 +63,7 @@ func NewBackupCommand() *cobra.Command {
 	}
 	cmd.Flags().StringVar(&dataDir, "data-dir", "", "Path to the etcd data dir")
 	cmd.Flags().StringVar(&walDir, "wal-dir", "", "Path to the etcd wal dir")
-	cmd.Flags().StringVar(&dbType, "db-type", "bolt", "bolt or badger")
+	cmd.Flags().StringVar(&dbType, "db-type", "bolt", "bolt or badger or sqlite")
 	cmd.Flags().StringVar(&backupDir, "backup-dir", "", "Path to the backup dir")
 	cmd.Flags().StringVar(&backupWalDir, "backup-wal-dir", "", "Path to the backup wal dir")
 	cmd.Flags().BoolVar(&withV3, "with-v3", true, "Backup v3 backend data. Note -with-v3=false is not supported since etcd v3.6. Please use v3.5.x client as the last supporting this deprecated functionality.")
@@ -137,7 +138,13 @@ func HandleBackup(withV3 bool, srcDir string, destDir string, srcWAL string, des
 
 	walsnap := saveSnap(lg, destSnap, srcSnap, &desired)
 	metadata, state, ents := translateWAL(lg, srcWAL, walsnap)
-	saveBoltDB(lg, destDbPath, srcDbPath, state.Commit, state.Term, &desired)
+	if dbType == "bolt" {
+		saveBoltDB(lg, destDbPath, srcDbPath, state.Commit, state.Term, &desired)
+	} else if dbType == "badger" {
+		saveBadgerDB(lg, destDbPath, srcDbPath, state.Commit, state.Term, &desired)
+	} else if dbType == "sqlite" {
+		saveSqliteDB(lg, destDbPath, srcDbPath, state.Commit, state.Term, &desired)
+	}
 
 	neww, err := wal.Create(lg, destWAL, pbutil.MustMarshal(&metadata))
 	if err != nil {
@@ -155,6 +162,7 @@ func HandleBackup(withV3 bool, srcDir string, destDir string, srcWAL string, des
 		Logger:     lg,
 		DataDir:    destDir,
 		ExactIndex: false,
+		DBType:     backend.DBType(dbType),
 	})
 
 	return nil
@@ -268,9 +276,15 @@ func raftEntryToNoOp(entry *raftpb.Entry) {
 	*entry = raftpb.Entry{Term: entry.Term, Index: entry.Index, Type: raftpb.EntryNormal, Data: nil}
 }
 
+// saveBadgerDB copies the v3 backend and strips cluster information.
+func saveBadgerDB(lg *zap.Logger, destDB, srcDB string, idx uint64, term uint64, desired *desiredCluster) {
+	// todo(logicalhan) implement this
+}
+
 // saveBoltDB copies the v3 backend and strips cluster information.
 func saveBoltDB(lg *zap.Logger, destDB, srcDB string, idx uint64, term uint64, desired *desiredCluster) {
 	// open src db to safely copy db state
+	// 1. load db
 	var src *bolt.DB
 	ch := make(chan *bolt.DB, 1)
 	go func() {
@@ -280,37 +294,80 @@ func saveBoltDB(lg *zap.Logger, destDB, srcDB string, idx uint64, term uint64, d
 		}
 		ch <- db
 	}()
+	// wait for lock on db
 	select {
 	case src = <-ch:
 	case <-time.After(time.Second):
 		lg.Fatal("timed out waiting to acquire lock on", zap.String("srcDB", srcDB))
 	}
 	defer src.Close()
-
+	// begin transaction
 	tx, err := src.Begin(false)
+
 	if err != nil {
 		lg.Fatal("bbolt.BeginTx failed", zap.Error(err))
 	}
-
+	wrappedTxn := bbolt.BBoltTx{Btx: tx}
+	// create new db
 	// copy srcDB to destDB
-	dest, err := os.Create(destDB)
-	if err != nil {
-		lg.Fatal("creation of destination file failed", zap.String("dest", destDB), zap.Error(err))
-	}
-	if _, err := tx.WriteTo(dest); err != nil {
-		lg.Fatal("bbolt write to destination file failed", zap.String("dest", destDB), zap.Error(err))
-	}
-	dest.Close()
-	if err := tx.Rollback(); err != nil {
+	wrappedTxn.CopyDatabase(lg, destDB)
+	if err := wrappedTxn.Rollback(); err != nil {
 		lg.Fatal("bbolt tx.Rollback failed", zap.String("dest", destDB), zap.Error(err))
 	}
-
+	// initialize from new db
 	// trim membership info
 	be := backend.NewDefaultBackend(lg, destDB, &backend.BoltDB)
 	defer be.Close()
 	ms := schema.NewMembershipBackend(lg, be)
 	if err := ms.TrimClusterFromBackend(); err != nil {
 		lg.Fatal("bbolt tx.Membership failed", zap.Error(err))
+	}
+
+	raftCluster := membership.NewClusterFromMembers(lg, desired.clusterId, desired.members)
+	raftCluster.SetID(desired.nodeId, desired.clusterId)
+	raftCluster.SetBackend(ms)
+	raftCluster.PushMembershipToStorage()
+}
+
+// saveBadgerDB copies the v3 backend and strips cluster information.
+func saveSqliteDB(lg *zap.Logger, destDB, srcDB string, idx uint64, term uint64, desired *desiredCluster) {
+	// open src db to safely copy db state
+	// 1. load db
+	var src *sqlite.SqliteDB
+	ch := make(chan *sqlite.SqliteDB, 1)
+	go func() {
+		db, err := sqlite.NewBlankSqliteDB(srcDB)
+		if err != nil {
+			lg.Fatal("bolt.Open FAILED", zap.Error(err))
+		}
+		ch <- db
+	}()
+	// wait for lock on db
+	select {
+	case src = <-ch:
+	case <-time.After(time.Second):
+		lg.Fatal("timed out waiting to acquire lock on", zap.String("srcDB", srcDB))
+	}
+	defer src.Close()
+	// begin transaction
+	tx, err := src.Begin(false)
+
+	if err != nil {
+		lg.Fatal("sqlite.BeginTx failed", zap.Error(err))
+	}
+	// create new db
+	// copy srcDB to destDB
+	tx.CopyDatabase(lg, destDB)
+	if err := tx.Rollback(); err != nil {
+		lg.Fatal("sqlite tx.Rollback failed", zap.String("dest", destDB), zap.Error(err))
+	}
+	// initialize from new db
+	// trim membership info
+	be := backend.NewDefaultBackend(lg, destDB, &backend.SQLite)
+	defer be.Close()
+	ms := schema.NewMembershipBackend(lg, be)
+	if err := ms.TrimClusterFromBackend(); err != nil {
+		lg.Fatal("sqlite tx.Membership failed", zap.Error(err))
 	}
 
 	raftCluster := membership.NewClusterFromMembers(lg, desired.clusterId, desired.members)

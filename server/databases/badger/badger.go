@@ -22,9 +22,7 @@ import (
 	"hash/crc32"
 	"io"
 	"math"
-	"os"
 	"strings"
-	"sync"
 
 	badgerdb "github.com/dgraph-io/badger/v4"
 	"github.com/dgraph-io/ristretto"
@@ -41,11 +39,6 @@ const (
 	dbPrefix                      = "db/"
 )
 
-var (
-	txnCounter   int
-	txnCounterMu = sync.Mutex{}
-)
-
 type BadgerDB struct {
 	BadgerDB     *badgerdb.DB
 	Dir          string
@@ -60,6 +53,7 @@ type BadgerSuperSetDB interface {
 	Delete(key []byte) error
 	NewStream() *badgerdb.Stream
 	Backup(w io.Writer, since uint64) (uint64, error)
+	Flatten() error
 }
 
 func NewBadgerDB(db *badgerdb.DB, dir string) BadgerSuperSetDB {
@@ -78,10 +72,7 @@ func (b *BadgerDB) Get(key []byte) ([]byte, error) {
 		if err != nil {
 			return err
 		}
-		err = item.Value(func(val []byte) error {
-			valCopy = append([]byte{}, val...)
-			return nil
-		})
+		valCopy, err = item.ValueCopy(nil)
 		if err != nil {
 			return err
 		}
@@ -273,14 +264,6 @@ func (b *BadgerDB) Size() (size int64) {
 	return
 }
 
-func (b *BadgerDB) Update(fn interface{}) error {
-	return b.BadgerDB.Update(fn.(func(txn *badgerdb.Txn) error))
-}
-
-func (b *BadgerDB) View(fn interface{}) error {
-	return b.BadgerDB.View(fn.(func(txn *badgerdb.Txn) error))
-}
-
 func (b *BadgerDB) Sync() error {
 	return b.BadgerDB.Sync()
 }
@@ -315,36 +298,24 @@ func (b *BadgerDB) DBType() string {
 }
 
 type Tx struct {
-	txn      *badgerdb.Txn
-	id       int
-	db       BadgerSuperSetDB
-	writable bool
-	bucket   *string
+	txn           *badgerdb.Txn
+	id            int
+	db            BadgerSuperSetDB
+	writable      bool
+	bucket        *string
+	estimatedSize int64
 }
 
 func NewBadgerTxn(txn *badgerdb.Txn, db BadgerSuperSetDB, writable bool) *Tx {
 	if txn == nil {
 		return nil
 	}
-	txnCounterMu.Lock()
-	txnCounter++
-	txnCounterMu.Unlock()
-	txnid := txnCounter
 	return &Tx{
-		txn:      txn,
-		id:       txnid,
-		db:       db,
-		writable: writable,
+		txn:           txn,
+		db:            db,
+		writable:      writable,
+		estimatedSize: 0,
 	}
-}
-
-func (t *Tx) Check() <-chan error {
-	// todo(logicalhan) figure out how to return txn errors
-	return nil
-}
-
-func (t *Tx) ID() int {
-	return t.id
 }
 
 func (t *Tx) DB() interfaces.DB {
@@ -353,7 +324,14 @@ func (t *Tx) DB() interfaces.DB {
 
 func (t *Tx) Size() int64 {
 	// todo(logicalhan) what does size of transaction even mean here?
-	return 0
+	if !t.writable {
+		return 0
+	}
+	return t.estimatedSize
+}
+
+func (t *Tx) increaseEstimatedSize(size int64) {
+	t.estimatedSize += size
 }
 
 func (t *Tx) Writable() bool {
@@ -366,11 +344,7 @@ func (t *Tx) Stats() interface{} {
 }
 
 func (t *Tx) Bucket(name []byte) interfaces.Bucket {
-	// validate that the bucket exists.
-	if item, _ := t.txn.Get(append([]byte(bucketPrefix), name...)); item != nil {
-		return NewBadgerBucket(name, t.txn, t.db, t.writable)
-	}
-	return nil
+	return NewBadgerBucket(name, t.txn, t.db, t.writable)
 }
 
 func (t *Tx) CreateBucket(name []byte) (interfaces.Bucket, error) {
@@ -404,10 +378,6 @@ func (t *Tx) ForEach(i interface{}) error {
 	panic("implement me")
 }
 
-func (t *Tx) OnCommit(fn interface{}) {
-	t.txn.CommitWith(fn.(func(error)))
-}
-
 func (t *Tx) Commit() error {
 	return t.txn.Commit()
 }
@@ -416,23 +386,13 @@ func (t *Tx) Rollback() error {
 	return nil
 }
 
-func (t *Tx) Copy(w io.Writer) error {
-	_, err := t.WriteTo(w)
-	return err
-}
-
 func (t *Tx) WriteTo(w io.Writer) (int64, error) {
+	defer t.Commit()
 	overflow, err := t.DB().(BadgerSuperSetDB).Backup(w, 0)
 	return int64(overflow), err
 }
 
-func (t *Tx) CopyFile(path string, mode os.FileMode) error {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (t *Tx) Page(id int) (interface{}, error) {
-	//TODO implement me
+func (b *Tx) CopyDatabase(lg *zap.Logger, dst string) (err error) {
 	panic("implement me")
 }
 
@@ -513,11 +473,6 @@ func (b *BadgerBucket) Tx() interfaces.Tx {
 	return NewBadgerTxn(b.txn, b.db, b.writable)
 }
 
-func (b *BadgerBucket) Root() interface{} {
-	//TODO implement me
-	panic("implement me")
-}
-
 func (b *BadgerBucket) Writable() bool {
 	return b.writable
 }
@@ -540,21 +495,6 @@ func (b *BadgerBucket) Delete(key []byte) error {
 	return b.txn.Delete(fullyQualifiedKey)
 }
 
-func (b *BadgerBucket) Sequence() uint64 {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (b *BadgerBucket) SetSequence(v uint64) error {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (b *BadgerBucket) NextSequence() (uint64, error) {
-	//TODO implement me
-	panic("implement me")
-}
-
 func (b *BadgerBucket) ForEach(fn func(k []byte, v []byte) error) error {
 	txn := b.txn
 	it := txn.NewIterator(badgerdb.DefaultIteratorOptions)
@@ -574,17 +514,7 @@ func (b *BadgerBucket) ForEach(fn func(k []byte, v []byte) error) error {
 	return nil
 }
 
-func (b *BadgerBucket) ForEachBucket(i interface{}) error {
-	//TODO implement me
-	panic("implement me")
-}
-
 func (b *BadgerBucket) Stats() interface{} {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (b *BadgerBucket) FillPercent() float64 {
 	//TODO implement me
 	panic("implement me")
 }

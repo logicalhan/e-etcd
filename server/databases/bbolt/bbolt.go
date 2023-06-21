@@ -25,8 +25,9 @@ import (
 	"os"
 	"path/filepath"
 
-	bolt "go.etcd.io/bbolt"
 	"go.uber.org/zap"
+
+	bolt "go.etcd.io/bbolt"
 
 	"go.etcd.io/etcd/server/v3/interfaces"
 )
@@ -118,7 +119,7 @@ func (b *BBoltDB) Begin(writable bool) (interfaces.Tx, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &BBoltTx{tx: btx}, nil
+	return &BBoltTx{Btx: btx}, nil
 }
 
 func (b *BBoltDB) GetFromBucket(bucket string, key string) (val []byte) {
@@ -232,7 +233,7 @@ func (b *BBoltDB) defrag(err error, tmpdb *bolt.DB) (string, *bolt.DB, error, er
 		}
 	}()
 
-	// open a tx on old db for read
+	// open a Btx on old db for read
 	tx, err := odb.Begin(false)
 	if err != nil {
 		return "", nil, nil, err, true
@@ -279,14 +280,6 @@ func (b *BBoltDB) defrag(err error, tmpdb *bolt.DB) (string, *bolt.DB, error, er
 	return dbp, odb, err, nil, false
 }
 
-func (b *BBoltDB) Update(fn interface{}) error {
-	return b.db.Update(fn.(func(*bolt.Tx) error))
-}
-
-func (b *BBoltDB) View(fn interface{}) error {
-	return b.db.View(fn.(func(*bolt.Tx) error))
-}
-
 func (b *BBoltDB) Sync() error {
 	return b.db.Sync()
 }
@@ -308,43 +301,35 @@ func (b *BBoltDB) SetFreelistType(freelistType bolt.FreelistType) {
 }
 
 type BBoltTx struct {
-	tx *bolt.Tx
-}
-
-func (b *BBoltTx) Check() <-chan error {
-	return b.tx.Check()
-}
-
-func (b *BBoltTx) ID() int {
-	return b.tx.ID()
+	Btx *bolt.Tx
 }
 
 func (b *BBoltTx) DB() interfaces.DB {
-	return &BBoltDB{db: b.tx.DB()}
+	return &BBoltDB{db: b.Btx.DB()}
 }
 
 func (b *BBoltTx) Size() int64 {
-	return b.tx.Size()
+	return b.Btx.Size()
 }
 
 func (b *BBoltTx) Writable() bool {
-	return b.tx.Writable()
+	return b.Btx.Writable()
 }
 
 func (b *BBoltTx) Stats() interface{} {
-	return b.tx.Stats()
+	return b.Btx.Stats()
 }
 
 func (b *BBoltTx) Bucket(name []byte) interfaces.Bucket {
-	if buck := b.tx.Bucket(name); buck != nil {
-		return &BBoltBucket{b.tx.Bucket(name)}
+	if buck := b.Btx.Bucket(name); buck != nil {
+		return &BBoltBucket{b.Btx.Bucket(name)}
 	} else {
 		return nil
 	}
 }
 
 func (b *BBoltTx) CreateBucket(name []byte) (interfaces.Bucket, error) {
-	bbuck, err := b.tx.CreateBucket(name)
+	bbuck, err := b.Btx.CreateBucket(name)
 	if err != nil {
 		return nil, err
 	}
@@ -352,7 +337,7 @@ func (b *BBoltTx) CreateBucket(name []byte) (interfaces.Bucket, error) {
 }
 
 func (b *BBoltTx) CreateBucketIfNotExists(name []byte) (interfaces.Bucket, error) {
-	if buck, err := b.tx.CreateBucketIfNotExists(name); err != nil {
+	if buck, err := b.Btx.CreateBucketIfNotExists(name); err != nil {
 		return nil, err
 	} else {
 		return &BBoltBucket{buck}, nil
@@ -360,39 +345,40 @@ func (b *BBoltTx) CreateBucketIfNotExists(name []byte) (interfaces.Bucket, error
 }
 
 func (b *BBoltTx) DeleteBucket(name []byte) error {
-	return b.tx.DeleteBucket(name)
+	return b.Btx.DeleteBucket(name)
 }
 
 func (b *BBoltTx) ForEach(fn interface{}) error {
-	return b.tx.ForEach(fn.(func(name []byte, b *bolt.Bucket) error))
-}
-
-func (b *BBoltTx) OnCommit(fn interface{}) {
-	b.tx.OnCommit(fn.(func()))
+	return b.Btx.ForEach(fn.(func(name []byte, b *bolt.Bucket) error))
 }
 
 func (b *BBoltTx) Commit() error {
-	return b.tx.Commit()
+	return b.Btx.Commit()
 }
 
 func (b *BBoltTx) Rollback() error {
-	return b.tx.Rollback()
+	return b.Btx.Rollback()
 }
 
 func (b *BBoltTx) Copy(w io.Writer) error {
-	return b.tx.Copy(w)
+	return b.Btx.Copy(w)
 }
 
 func (b *BBoltTx) WriteTo(w io.Writer) (n int64, err error) {
-	return b.tx.WriteTo(w)
+	return b.Btx.WriteTo(w)
 }
 
-func (b *BBoltTx) CopyFile(path string, mode os.FileMode) error {
-	return b.tx.CopyFile(path, mode)
-}
-
-func (b *BBoltTx) Page(id int) (interface{}, error) {
-	return b.tx.Page(id)
+func (b *BBoltTx) CopyDatabase(lg *zap.Logger, dst string) (err error) {
+	dest, err := os.Create(dst)
+	if err != nil {
+		lg.Fatal("creation of destination file failed", zap.String("dest", dst), zap.Error(err))
+	}
+	// write contents to new db
+	if _, err := b.Btx.WriteTo(dest); err != nil {
+		lg.Fatal("bbolt write to destination file failed", zap.String("dest", dst), zap.Error(err))
+	}
+	// close dest db
+	return dest.Close()
 }
 
 type BBoltBucket struct {
@@ -401,13 +387,9 @@ type BBoltBucket struct {
 
 func (b *BBoltBucket) Tx() interfaces.Tx {
 	if btx := b.bucket.Tx(); btx != nil {
-		return &BBoltTx{tx: btx}
+		return &BBoltTx{Btx: btx}
 	}
 	return nil
-}
-
-func (b *BBoltBucket) Root() interface{} {
-	return b.bucket.Root()
 }
 
 func (b *BBoltBucket) Writable() bool {
@@ -444,10 +426,6 @@ func (b *BBoltBucket) Bucket(name []byte) interfaces.Bucket {
 	return nil
 }
 
-func (b *BBoltBucket) FillPercent() float64 {
-	return b.bucket.FillPercent
-}
-
 func (b *BBoltBucket) SetFillPercent(fp float64) {
 	b.bucket.FillPercent = fp
 }
@@ -481,18 +459,6 @@ func (b *BBoltBucket) Put(key []byte, value []byte) error {
 
 func (b *BBoltBucket) Delete(key []byte) error {
 	return b.bucket.Delete(key)
-}
-
-func (b *BBoltBucket) Sequence() uint64 {
-	return b.bucket.Sequence()
-}
-
-func (b *BBoltBucket) SetSequence(v uint64) error {
-	return b.bucket.SetSequence(v)
-}
-
-func (b *BBoltBucket) NextSequence() (uint64, error) {
-	return b.bucket.NextSequence()
 }
 
 func (b *BBoltBucket) ForEach(fn func(k []byte, v []byte) error) error {

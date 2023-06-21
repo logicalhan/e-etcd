@@ -972,6 +972,7 @@ func (m *Member) Launch() error {
 		zap.String("grpc-url", m.GrpcURL),
 	)
 	var err error
+
 	if m.Server, err = etcdserver.NewServer(m.ServerConfig); err != nil {
 		return fmt.Errorf("failed to initialize the etcd server: %v", err)
 	}

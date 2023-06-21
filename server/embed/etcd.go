@@ -166,7 +166,7 @@ func StartEtcd(inCfg *Config) (e *Etcd, err error) {
 	}
 
 	backendFreelistType := parseBackendFreelistType(cfg.BackendFreelistType)
-
+	println("initializing", cfg.DBType)
 	srvcfg := config.ServerConfig{
 		Name:                                     cfg.Name,
 		DBType:                                   backend.DBType(cfg.DBType),
@@ -349,7 +349,7 @@ func print(lg *zap.Logger, ec Config, sc config.ServerConfig, memberInitialized 
 		zap.Int64("quota-backend-bytes", quota),
 		zap.Uint("max-request-bytes", sc.MaxRequestBytes),
 		zap.Uint32("max-concurrent-streams", sc.MaxConcurrentStreams),
-
+		zap.String("db-type", string(sc.DBType)),
 		zap.Bool("pre-vote", sc.PreVote),
 		zap.Bool("initial-corrupt-check", sc.InitialCorruptCheck),
 		zap.String("corrupt-check-time-interval", sc.CorruptCheckTime.String()),

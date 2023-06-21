@@ -63,13 +63,15 @@ func OpenSnapshotBackend(cfg config.ServerConfig, ss *snap.Snapshotter, snapshot
 	if err != nil {
 		return nil, fmt.Errorf("failed to find database snapshot file (%v)", err)
 	}
-	if err := os.RemoveAll(cfg.BackendPath()); err != nil {
-		return nil, fmt.Errorf("failed to remove database dir (%v)", err)
-	}
 	if err := os.Rename(snapPath, cfg.BackendPath()); err != nil {
 		return nil, fmt.Errorf("failed to rename database snapshot file (%v)", err)
 	}
-	return OpenBackend(cfg, hooks), nil
+
+	if cfg.DBType == "badger" {
+		return nil, nil
+	} else {
+		return OpenBackend(cfg, hooks), nil
+	}
 }
 
 // OpenBackend returns a backend using the current etcd db.

@@ -23,9 +23,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/zap/zaptest"
 
+	"go.etcd.io/etcd/server/v3/bucket"
 	"go.etcd.io/etcd/server/v3/storage/backend"
 	betesting "go.etcd.io/etcd/server/v3/storage/backend/testing"
-	"go.etcd.io/etcd/server/v3/storage/schema"
 )
 
 // TestScheduledCompact ensures that UnsafeSetScheduledCompact&UnsafeReadScheduledCompact work well together.
@@ -59,7 +59,7 @@ func TestScheduledCompact(t *testing.T) {
 					t.Fatal("batch tx is nil")
 				}
 				tx.Lock()
-				tx.UnsafeCreateBucket(schema.Meta)
+				tx.UnsafeCreateBucket(bucket.Meta)
 				UnsafeSetScheduledCompact(tx, tc.value)
 				tx.Unlock()
 				be.ForceCommit()
@@ -106,7 +106,7 @@ func TestFinishedCompact(t *testing.T) {
 					t.Fatal("batch tx is nil")
 				}
 				tx.Lock()
-				tx.UnsafeCreateBucket(schema.Meta)
+				tx.UnsafeCreateBucket(bucket.Meta)
 				UnsafeSetFinishedCompact(tx, tc.value)
 				tx.Unlock()
 				be.ForceCommit()
