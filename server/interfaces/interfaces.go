@@ -17,6 +17,7 @@ limitations under the License.
 package interfaces
 
 import (
+	"github.com/prometheus/client_golang/prometheus"
 	"io"
 
 	"go.uber.org/zap"
@@ -51,6 +52,7 @@ type Tx interface {
 	Size() int64
 	Writable() bool
 	Stats() interface{}
+	Observe(rebalanceHist, spillHist, writeHist prometheus.Histogram)
 	Bucket(name []byte) Bucket
 	CreateBucket(name []byte) (Bucket, error)
 	DeleteBucket(name []byte) error

@@ -19,6 +19,7 @@ package bbolt
 import (
 	"bytes"
 	"fmt"
+	"github.com/prometheus/client_golang/prometheus"
 	"hash/crc32"
 	"io"
 	"math"
@@ -334,6 +335,13 @@ func (b *BBoltTx) CreateBucket(name []byte) (interfaces.Bucket, error) {
 		return nil, err
 	}
 	return &BBoltBucket{bbuck}, nil
+}
+
+func (b *BBoltTx) Observe(rebalanceHist, spillHist, writeHist prometheus.Histogram) {
+	txstats := b.Btx.Stats()
+	rebalanceHist.Observe(txstats.GetRebalanceTime().Seconds())
+	spillHist.Observe(txstats.GetSpillTime().Seconds())
+	writeHist.Observe(txstats.GetWriteTime().Seconds())
 }
 
 func (b *BBoltTx) CreateBucketIfNotExists(name []byte) (interfaces.Bucket, error) {

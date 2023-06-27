@@ -25,6 +25,7 @@ import (
 	"bufio"
 	"database/sql"
 	"fmt"
+	"github.com/prometheus/client_golang/prometheus"
 	"hash/crc32"
 	"io"
 	"log"
@@ -102,11 +103,7 @@ func NewBlankSqliteDB(dir string) (*SqliteDB, error) {
 func NewSqliteDB[B BackendBucket](dir string, buckets ...B) (*SqliteDB, error) {
 	parts := strings.Split(dir, "/")
 	subdir := strings.Join(parts[:len(parts)-1], "/")
-	if err := os.MkdirAll(subdir, 0755); err != nil {
-		fmt.Printf("couldn't make directory: %s", dir)
-		return nil, err
-	}
-	db, err := sql.Open("sqlite3", subdir+"/"+dbName)
+	db, err := sql.Open("sqlite3", dir)
 
 	if err != nil {
 		return nil, err
@@ -342,8 +339,6 @@ func (s *SqliteTx) Bucket(name []byte) interfaces.Bucket {
 func (s *SqliteTx) CreateBucket(name []byte) (interfaces.Bucket, error) {
 	tableName := resolveTableName(string(name))
 	query := fmt.Sprintf(createBucketQuery, tableName)
-	fmt.Println("HAN HAN")
-	fmt.Println(query)
 	_, err := s.tx.Exec(query)
 	if err != nil {
 		return nil, err
@@ -366,10 +361,15 @@ func (s *SqliteTx) ForEach(i interface{}) error {
 	//TODO implement me
 	panic("implement me")
 }
+
+func (s *SqliteTx) Observe(rebalanceHist, spillHist, writeHist prometheus.Histogram) {
+	// no-opt
+}
+
 func (s *SqliteTx) WriteTo(w io.Writer) (n int64, err error) {
 	tmpdir := os.TempDir()
 	os.MkdirAll(tmpdir, 0755)
-	backup := tmpdir + "/etcd.bak"
+	backup := tmpdir + "etcd.sqlite"
 	os.Remove(backup)
 	if _, err := s.db.Exec(`VACUUM main INTO ?;`, backup); err != nil {
 		return 0, err
@@ -381,6 +381,7 @@ func (s *SqliteTx) WriteTo(w io.Writer) (n int64, err error) {
 	size := stat.Size()
 	s.size = size
 	f, err := os.Open(backup)
+	defer f.Close()
 	if err != nil {
 		return 0, err
 	}
@@ -450,8 +451,8 @@ func (s *SqliteBucket) Put(key []byte, value []byte) error {
 }
 
 func (s *SqliteBucket) UnsafeRange(key, endKey []byte, limit int64) (keys [][]byte, vs [][]byte) {
-	println("UnsafeRange", string(key), string(endKey), limit)
-	if endKey == nil {
+	println(s.dir)
+	if endKey == nil || limit == 0 || limit == 1 {
 		query := fmt.Sprintf(genericGet, s.name)
 		r, err := s.TX.Query(query, string(key))
 		defer r.Close()

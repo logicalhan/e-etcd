@@ -56,15 +56,25 @@ func TestBackendClose(t *testing.T) {
 }
 
 func TestBackendSnapshot(t *testing.T) {
-	b, _ := betesting.NewTmpBoltBackend(t, time.Hour, 10000)
+	b, _ := betesting.NewTmpSqliteBackend(t, time.Hour, 10000)
 	defer betesting.Close(t, b)
 
 	tx := b.BatchTx()
 	tx.Lock()
 	tx.UnsafeCreateBucket(bucket2.Test)
 	tx.UnsafePut(bucket2.Test, []byte("foo"), []byte("bar"))
+	tx.UnsafePut(bucket2.Test, []byte("foo1"), []byte("bar1"))
+	tx.UnsafePut(bucket2.Test, []byte("foo2"), []byte("bar2"))
 	tx.Unlock()
 	b.ForceCommit()
+	oldtx := b.BatchTx()
+	oldtx.Lock()
+	oldks, _ := oldtx.UnsafeRange(bucket2.Test, []byte("foo"), []byte("goo"), 0)
+	if len(oldks) != 1 {
+		t.Errorf("len(kvs) = %d, want 1", len(oldks))
+	}
+	oldtx.Unlock()
+	oldtx.Commit()
 	// write snapshot to a new file
 	f, err := os.CreateTemp(t.TempDir(), "etcd_backend_test")
 	if err != nil {
@@ -75,11 +85,15 @@ func TestBackendSnapshot(t *testing.T) {
 	if _, err := snap.WriteTo(f); err != nil {
 		t.Fatal(err)
 	}
+	stat, _ := f.Stat()
+	println(stat.Size())
 	assert.NoError(t, f.Close())
 
 	// bootstrap new backend from the snapshot
 	bcfg := backend.DefaultBackendConfig(zaptest.NewLogger(t))
+	println("f.Name()", f.Name())
 	bcfg.Path, bcfg.BatchInterval, bcfg.BatchLimit = f.Name(), time.Hour, 10000
+	bcfg.DBType = &backend.SQLite
 	nb := backend.New(bcfg)
 	defer betesting.Close(t, nb)
 

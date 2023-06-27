@@ -235,14 +235,7 @@ func (t *batchTx) commit(stop bool) {
 		err := t.tx.Commit()
 		// gofail: var afterCommit struct{}
 
-		db := t.tx.DB()
-		if db.DBType() == "bolt" {
-			txstats := t.tx.Stats().(bolt.TxStats)
-			rebalanceSec.Observe(txstats.RebalanceTime.Seconds())
-			spillSec.Observe(txstats.SpillTime.Seconds())
-			writeSec.Observe(txstats.WriteTime.Seconds())
-		}
-
+		t.tx.Observe(rebalanceSec, spillSec, writeSec)
 		commitSec.Observe(time.Since(start).Seconds())
 		atomic.AddInt64(&t.backend.commits, 1)
 

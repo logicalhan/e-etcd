@@ -235,10 +235,8 @@ func NewDefaultBackend(lg *zap.Logger, path string, dbType *DBType) Backend {
 }
 
 func newSqliteBackend(bcfg BackendConfig) (*backend, error) {
-	println("here i am, new sqlite", bcfg.Path)
 	db, err := sqlite.NewSqliteDB(bcfg.Path, bucket.Buckets...)
 	if err != nil {
-		println("OH NOZ", err.Error())
 		return nil, err
 	}
 	b := &backend{
