@@ -19,11 +19,12 @@ package badger
 import (
 	"bytes"
 	"fmt"
-	"github.com/prometheus/client_golang/prometheus"
 	"hash/crc32"
 	"io"
 	"math"
 	"strings"
+
+	"github.com/prometheus/client_golang/prometheus"
 
 	badgerdb "github.com/dgraph-io/badger/v4"
 	"github.com/dgraph-io/ristretto"
@@ -370,7 +371,6 @@ func (t *Tx) CreateBucketIfNotExists(name []byte) (interfaces.Bucket, error) {
 func (t *Tx) Observe(rebalanceHist, spillHist, writeHist prometheus.Histogram) {
 	// no-opt
 }
-
 
 func (t *Tx) DeleteBucket(name []byte) error {
 	if t.bucket == nil {

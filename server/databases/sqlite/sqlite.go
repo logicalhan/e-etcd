@@ -25,12 +25,13 @@ import (
 	"bufio"
 	"database/sql"
 	"fmt"
-	"github.com/prometheus/client_golang/prometheus"
 	"hash/crc32"
 	"io"
 	"log"
 	"os"
 	"strings"
+
+	"github.com/prometheus/client_golang/prometheus"
 
 	_ "github.com/mattn/go-sqlite3"
 	"go.uber.org/zap"

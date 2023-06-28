@@ -2,7 +2,7 @@
 #
 # Run all etcd tests
 # ./scripts/test.sh
-# ./scripts/test.sh -v
+# ./scripts/test.sh -vq
 #
 #
 # Run specified test pass

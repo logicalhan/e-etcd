@@ -19,12 +19,13 @@ package bbolt
 import (
 	"bytes"
 	"fmt"
-	"github.com/prometheus/client_golang/prometheus"
 	"hash/crc32"
 	"io"
 	"math"
 	"os"
 	"path/filepath"
+
+	"github.com/prometheus/client_golang/prometheus"
 
 	"go.uber.org/zap"
 

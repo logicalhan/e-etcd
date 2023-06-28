@@ -17,8 +17,9 @@ limitations under the License.
 package interfaces
 
 import (
-	"github.com/prometheus/client_golang/prometheus"
 	"io"
+
+	"github.com/prometheus/client_golang/prometheus"
 
 	"go.uber.org/zap"
 
