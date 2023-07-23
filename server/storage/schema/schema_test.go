@@ -15,6 +15,7 @@
 package schema
 
 import (
+	"go.etcd.io/etcd/server/v3/bucket"
 	"testing"
 	"time"
 
@@ -83,7 +84,7 @@ func TestValidate(t *testing.T) {
 			lg := zap.NewNop()
 			dataPath := setupBackendData(t, tc.version, tc.overrideKeys)
 
-			b := backend.NewDefaultBackend(lg, dataPath)
+			b := backend.NewDefaultBackend(lg, dataPath, defaultTestBackend)
 			defer b.Close()
 			err := Validate(lg, b.ReadTx())
 			if (err != nil) != tc.expectError {
@@ -211,7 +212,7 @@ func TestMigrate(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			b := backend.NewDefaultBackend(lg, dataPath)
+			b := backend.NewDefaultBackend(lg, dataPath, defaultTestBackend)
 			defer b.Close()
 
 			err = Migrate(lg, b.BatchTx(), walVersion, tc.targetVersion)
@@ -255,12 +256,12 @@ func TestMigrateIsReversible(t *testing.T) {
 			lg := zap.NewNop()
 			dataPath := setupBackendData(t, tc.initialVersion, nil)
 
-			be := backend.NewDefaultBackend(lg, dataPath)
+			be := backend.NewDefaultBackend(lg, dataPath, defaultTestBackend)
 			defer be.Close()
 			tx := be.BatchTx()
 			tx.Lock()
 			defer tx.Unlock()
-			assertBucketState(t, tx, Meta, tc.state)
+			assertBucketState(t, tx, bucket.Meta, tc.state)
 			w, walPath := waltesting.NewTmpWAL(t, nil)
 			walVersion, err := wal.ReadWALVersion(w)
 			if err != nil {
@@ -289,7 +290,7 @@ func TestMigrateIsReversible(t *testing.T) {
 			}
 
 			// Assert that all changes were revered
-			assertBucketState(t, tx, Meta, tc.state)
+			assertBucketState(t, tx, bucket.Meta, tc.state)
 		})
 	}
 }
@@ -319,7 +320,7 @@ func setupBackendData(t *testing.T, ver semver.Version, overrideKeys func(tx bac
 			MustUnsafeSaveConfStateToBackend(zap.NewNop(), tx, &raftpb.ConfState{})
 			UnsafeUpdateConsistentIndex(tx, 1, 1)
 			UnsafeSetStorageVersion(tx, &version.V3_7)
-			tx.UnsafePut(Meta, []byte("future-key"), []byte(""))
+			tx.UnsafePut(bucket.Meta, []byte("future-key"), []byte(""))
 		default:
 			t.Fatalf("Unsupported storage version")
 		}

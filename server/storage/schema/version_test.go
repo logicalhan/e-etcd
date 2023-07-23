@@ -15,6 +15,7 @@
 package schema
 
 import (
+	"go.etcd.io/etcd/server/v3/bucket"
 	"testing"
 	"time"
 
@@ -64,13 +65,13 @@ func TestVersion(t *testing.T) {
 				t.Fatal("batch tx is nil")
 			}
 			tx.Lock()
-			tx.UnsafeCreateBucket(Meta)
+			tx.UnsafeCreateBucket(bucket.Meta)
 			UnsafeSetStorageVersion(tx, semver.New(tc.version))
 			tx.Unlock()
 			be.ForceCommit()
 			be.Close()
 
-			b := backend.NewDefaultBackend(lg, tmpPath)
+			b := backend.NewDefaultBackend(lg, tmpPath, defaultTestBackend)
 			defer b.Close()
 			v := UnsafeReadStorageVersion(b.BatchTx())
 
@@ -110,7 +111,7 @@ func TestVersionSnapshot(t *testing.T) {
 				t.Fatal("batch tx is nil")
 			}
 			tx.Lock()
-			tx.UnsafeCreateBucket(Meta)
+			tx.UnsafeCreateBucket(bucket.Meta)
 			UnsafeSetStorageVersion(tx, semver.New(tc.version))
 			tx.Unlock()
 			be.ForceCommit()

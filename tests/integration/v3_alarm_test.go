@@ -16,6 +16,7 @@ package integration
 
 import (
 	"context"
+	"go.etcd.io/etcd/server/v3/embed"
 	"os"
 	"path/filepath"
 	"sync"
@@ -194,7 +195,7 @@ func TestV3CorruptAlarm(t *testing.T) {
 	// Corrupt member 0 by modifying backend offline.
 	clus.Members[0].Stop(t)
 	fp := filepath.Join(clus.Members[0].DataDir, "member", "snap", "db")
-	be := backend.NewDefaultBackend(lg, fp)
+	be := backend.NewDefaultBackend(lg, fp, embed.DefaultBackendType)
 	s := mvcc.NewStore(lg, be, nil, mvcc.StoreConfig{})
 	// NOTE: cluster_proxy mode with namespacing won't set 'k', but namespace/'k'.
 	s.Put([]byte("abc"), []byte("def"), 0)

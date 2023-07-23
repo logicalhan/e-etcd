@@ -69,7 +69,7 @@ type SqliteDB struct {
 	DB           *sql.DB
 	Dir          string
 	dbName       string
-	FreeListType bolt.FreelistType // no-opts
+	FreeListType string // no-opts
 }
 
 type BackendBucket interface {
@@ -137,7 +137,7 @@ func newDB(db *sql.DB, dir string, dbName string) *SqliteDB {
 		DB:           db,
 		Dir:          dir,
 		dbName:       dbName,
-		FreeListType: bolt.FreelistMapType, // dummy value
+		FreeListType: string(bolt.FreelistMapType), // dummy value
 	}
 }
 
@@ -286,11 +286,11 @@ func (s *SqliteDB) Info() interface{} {
 	return s.DB.Stats()
 }
 
-func (s *SqliteDB) SetFreelistType(freelistType bolt.FreelistType) {
+func (s *SqliteDB) SetFreelistType(freelistType string) {
 	s.FreeListType = freelistType
 }
 
-func (s *SqliteDB) FreelistType() bolt.FreelistType {
+func (s *SqliteDB) FreelistType() string {
 	return s.FreeListType
 }
 

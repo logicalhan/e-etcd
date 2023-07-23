@@ -50,6 +50,8 @@ import (
 	"go.etcd.io/raft/v3/raftpb"
 )
 
+const defaultBackendType = "bolt"
+
 // Manager defines snapshot methods.
 type Manager interface {
 	// Save fetches snapshot from remote etcd server, saves data
@@ -318,7 +320,7 @@ func (s *v3Manager) saveDB() error {
 		return err
 	}
 
-	be := backend.NewDefaultBackend(s.lg, s.outDbPath())
+	be := backend.NewDefaultBackend(s.lg, s.outDbPath(), defaultBackendType)
 	defer be.Close()
 
 	err = schema.NewMembershipBackend(s.lg, be).TrimMembershipFromBackend()
@@ -475,7 +477,7 @@ func (s *v3Manager) saveWALAndSnap() (*raftpb.HardState, error) {
 	// add members again to persist them to the store we create.
 	st := v2store.New(etcdserver.StoreClusterPrefix, etcdserver.StoreKeysPrefix)
 	s.cl.SetStore(st)
-	be := backend.NewDefaultBackend(s.lg, s.outDbPath())
+	be := backend.NewDefaultBackend(s.lg, s.outDbPath(), defaultBackendType)
 	defer be.Close()
 	s.cl.SetBackend(schema.NewMembershipBackend(s.lg, be))
 	for _, m := range s.cl.Members() {
@@ -558,7 +560,7 @@ func (s *v3Manager) saveWALAndSnap() (*raftpb.HardState, error) {
 }
 
 func (s *v3Manager) updateCIndex(commit uint64, term uint64) error {
-	be := backend.NewDefaultBackend(s.lg, s.outDbPath())
+	be := backend.NewDefaultBackend(s.lg, s.outDbPath(), defaultBackendType)
 	defer be.Close()
 
 	cindex.UpdateConsistentIndexForce(be.BatchTx(), commit, term)

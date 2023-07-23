@@ -40,7 +40,7 @@ const (
 
 type DbOpts struct {
 	MMapSize     int
-	FreelistType interface{}
+	FreelistType string
 	NoSync       bool
 	NoGrowSync   bool
 	Mlock        bool
@@ -52,8 +52,8 @@ func SetOptions(opts DbOpts) *bolt.Options {
 		*bopts = *boltOpenOptions
 	}
 	bopts.InitialMmapSize = opts.MMapSize
-	if opts.FreelistType != nil {
-		bopts.FreelistType = opts.FreelistType.(bolt.FreelistType)
+	if opts.FreelistType != "" {
+		bopts.FreelistType = bolt.FreelistType(opts.FreelistType)
 	}
 	bopts.NoSync = opts.NoSync
 	bopts.NoGrowSync = opts.NoGrowSync
@@ -294,12 +294,12 @@ func (b *BBoltDB) Info() interface{} {
 	return b.db.Info()
 }
 
-func (b *BBoltDB) FreelistType() bolt.FreelistType {
-	return b.db.FreelistType
+func (b *BBoltDB) FreelistType() string {
+	return string(b.db.FreelistType)
 }
 
-func (b *BBoltDB) SetFreelistType(freelistType bolt.FreelistType) {
-	b.db.FreelistType = freelistType
+func (b *BBoltDB) SetFreelistType(freeListType string) {
+	b.db.FreelistType = bolt.FreelistType(freeListType)
 }
 
 type BBoltTx struct {

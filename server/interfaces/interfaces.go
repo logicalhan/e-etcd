@@ -22,8 +22,6 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 
 	"go.uber.org/zap"
-
-	bolt "go.etcd.io/bbolt"
 )
 
 type DB interface {
@@ -41,8 +39,8 @@ type DB interface {
 	Sync() error
 	Stats() interface{}
 	Info() interface{}
-	SetFreelistType(freelistType bolt.FreelistType)
-	FreelistType() bolt.FreelistType
+	SetFreelistType(string)
+	FreelistType() string
 	DBType() string
 	HashBuckets(ignores func(bucketName, keyName []byte) bool) (uint32, error)
 	Defrag(logger *zap.Logger, dbopts interface{}) error
