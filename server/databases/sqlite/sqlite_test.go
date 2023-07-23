@@ -66,7 +66,7 @@ func TestPutAndGetFromBucket(t *testing.T) {
 	if err != nil {
 		t.Fatalf("expected no err, got %v", err)
 	}
-	//db.CreateBucket("key")
+
 	txn, err := db.Begin(true)
 	if err != nil {
 		t.Errorf("expected no err, got %v", err)
@@ -120,7 +120,6 @@ func TestUnsafeRangeUncommitted(t *testing.T) {
 	if err != nil {
 		t.Fatalf("expected no err, got %v", err)
 	}
-	//db.CreateBucket("key")
 	txn, err := db.Begin(true)
 	if err != nil {
 		t.Errorf("expected no err, got %v", err)
@@ -157,7 +156,6 @@ func TestForEach(t *testing.T) {
 	if err != nil {
 		t.Fatalf("expected no err, got %v", err)
 	}
-	//db.CreateBucket("key")
 
 	for i := 0; i < 1000; i++ {
 		if _, err := db.DB.Exec(sqlite.UpsertKV, "key-"+strconv.Itoa(i), "value-"+strconv.Itoa(i)); err != nil {

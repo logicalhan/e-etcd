@@ -261,12 +261,14 @@ func (s *SqliteDB) Begin(writable bool) (interfaces.Tx, error) {
 func (s *SqliteDB) Size() (size int64) {
 	tmpdir := os.TempDir()
 	os.MkdirAll(tmpdir, 0755)
-	backup := tmpdir + "etcd.sqlite"
+	backup := tmpdir + "/etcd.sqlite"
 	os.Remove(backup)
 	if _, err := s.DB.Exec(`VACUUM main INTO ?;`, backup); err != nil {
+		println("asdfasdfadsf", err.Error())
 		return 0
 	}
 	stat, err := os.Stat(backup)
+
 	if err != nil {
 		return 0
 	}
