@@ -338,7 +338,7 @@ function go_test {
     local cmd=( go test ${goTestFlags} ${additional_flags} ${pkg} "$@" )
 
     # shellcheck disable=SC2086
-    if ! run env ${goTestEnv} ETCD_VERIFY="${ETCD_VERIFY}" "${cmd[@]}" | tee ${junit_filename_prefix:+"${junit_filename_prefix}.stdout"} | grep --binary-files=text "${go_test_grep_pattern}" ; then
+    if ! run env ${goTestEnv} CGO_ENABLED=1 ETCD_VERIFY="${ETCD_VERIFY}" "${cmd[@]}" | tee ${junit_filename_prefix:+"${junit_filename_prefix}.stdout"} | grep --binary-files=text "${go_test_grep_pattern}" ; then
       if [ "${mode}" != "keep_going" ]; then
         produce_junit_xmlreport "${junit_filename_prefix}"
         return 2
