@@ -25,6 +25,7 @@ jobs:
           TARGET: ${{ matrix.target }}
         run: |
           set -euo pipefail
+          sudo apt-get install gcc-multilib g++-multilib
           go clean -testcache
 
           mkdir "${TARGET}"
@@ -32,21 +33,21 @@ jobs:
           case "${TARGET}" in
             linux-amd64-integration-1-cpu)
               make gofail-enable
-              GOOS=linux GOARCH=amd64 CPU=1 make test-integration
+              GOOS=linux CGO_ENABLED=1 GOARCH=amd64 CPU=1 make test-integration
               ;;
             linux-amd64-integration-2-cpu)
               make gofail-enable
-              GOOS=linux GOARCH=amd64 CPU=2 make test-integration
+              GOOS=linux CGO_ENABLED=1 GOARCH=amd64 CPU=2 make test-integration
               ;;
             linux-amd64-integration-4-cpu)
               make gofail-enable
-              GOOS=linux GOARCH=amd64 CPU=4 make test-integration
+              GOOS=linux CGO_ENABLED=1 GOARCH=amd64 CPU=4 make test-integration
               ;;
             linux-amd64-unit-4-cpu-race)
-              GOOS=linux GOARCH=amd64 CPU=4 RACE=true GO_TEST_FLAGS='-p=2' make test-unit
+              GOOS=linux CGO_ENABLED=1 GOARCH=amd64 CPU=4 RACE=true GO_TEST_FLAGS='-p=2' make test-unit
               ;;
             linux-386-unit-1-cpu)
-              GOOS=linux GOARCH=386 CPU=1 GO_TEST_FLAGS='-p=4' make test-unit
+              GOOS=linux CGO_ENABLED=1 GOARCH=386 CPU=1 GO_TEST_FLAGS='-p=4' make test-unit
               ;;
             *)
               echo "Failed to find target"

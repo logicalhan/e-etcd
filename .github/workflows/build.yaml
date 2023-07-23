@@ -36,31 +36,31 @@ jobs:
           echo "${TARGET}"
           case "${TARGET}" in
             linux-amd64)
-              GOOS=linux GOARCH=amd64 make build
+              CGO_ENABLED=1 GOOS=linux GOARCH=amd64 make build
               ;;
             linux-386)
-              GOOS=linux GOARCH=386 make build
+              CGO_ENABLED=1 GOOS=linux GOARCH=386 make build
               ;;
             darwin-amd64)
-              GOOS=darwin GOARCH=amd64 make build
+              CGO_ENABLED=1 GOOS=darwin GOARCH=amd64 make build
               ;;
             darwin-arm64)
-              GOOS=darwin GOARCH=arm64 make build
+              CGO_ENABLED=1 GOOS=darwin GOARCH=arm64 make build
               ;;
             windows-amd64)
-              GOOS=windows GOARCH=amd64 make build
+              CGO_ENABLED=1 GOOS=windows GOARCH=amd64 make build
               ;;
             linux-arm)
-              GOOS=linux GOARCH=arm make build
+              CGO_ENABLED=1 GOOS=linux GOARCH=arm make build
               ;;
             linux-arm64)
-              GOOS=linux GOARCH=arm64 make build
+              CGO_ENABLED=1 GOOS=linux GOARCH=arm64 make build
               ;;
             linux-ppc64le)
-              GOOS=linux GOARCH=ppc64le make build
+              CGO_ENABLED=1 GOOS=linux GOARCH=ppc64le make build
               ;;
             linux-s390x)
-              GOOS=linux GOARCH=s390x make build
+              CGO_ENABLED=1 GOOS=linux GOARCH=s390x make build
               ;;
             *)
               echo "Failed to find target"
