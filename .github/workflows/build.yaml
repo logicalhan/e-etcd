@@ -28,6 +28,7 @@ jobs:
           go-version: ${{ steps.goversion.outputs.goversion }}
       - env:
           TARGET: ${{ matrix.target }}
+          CGO_ENABLED: 1
         run: |
           set -euo pipefail
 
