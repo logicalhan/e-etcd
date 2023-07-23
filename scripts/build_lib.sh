@@ -80,7 +80,7 @@ tools_build() {
     echo "Building" "'${tool}'"...
     run rm -f "${out}/${tool}"
     # shellcheck disable=SC2086
-    run env GO_BUILD_FLAGS="${GO_BUILD_FLAGS}" CGO_ENABLED=0 go build ${GO_BUILD_FLAGS} \
+    run env GO_BUILD_FLAGS="${GO_BUILD_FLAGS}" CGO_ENABLED=1 go build ${GO_BUILD_FLAGS} \
       -trimpath \
       -installsuffix=cgo \
       "-ldflags=${GO_LDFLAGS[*]}" \
