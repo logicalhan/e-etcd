@@ -15,7 +15,7 @@ jobs:
       - name: release
         run: |
           set -euo pipefail
-
+          sudo apt-get install gcc-multilib g++-multilib
           git config --global user.email "github-action@etcd.io"
           git config --global user.name "Github Action"
           gpg --batch --gen-key <<EOF
