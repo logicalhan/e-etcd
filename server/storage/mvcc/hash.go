@@ -15,11 +15,12 @@
 package mvcc
 
 import (
-	"go.etcd.io/etcd/server/v3/bucket"
 	"hash"
 	"hash/crc32"
 	"sort"
 	"sync"
+
+	"go.etcd.io/etcd/server/v3/bucket"
 
 	"go.uber.org/zap"
 

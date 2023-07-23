@@ -16,10 +16,11 @@ package mvcc
 
 import (
 	"context"
-	"go.etcd.io/etcd/server/v3/bucket"
 	"reflect"
 	"testing"
 	"time"
+
+	"go.etcd.io/etcd/server/v3/bucket"
 
 	"go.uber.org/zap/zaptest"
 

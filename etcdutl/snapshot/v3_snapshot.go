@@ -19,13 +19,14 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
-	"go.etcd.io/etcd/server/v3/bucket"
 	"hash/crc32"
 	"io"
 	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
+
+	"go.etcd.io/etcd/server/v3/bucket"
 
 	"go.uber.org/zap"
 

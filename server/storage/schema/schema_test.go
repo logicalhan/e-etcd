@@ -15,9 +15,10 @@
 package schema
 
 import (
-	"go.etcd.io/etcd/server/v3/bucket"
 	"testing"
 	"time"
+
+	"go.etcd.io/etcd/server/v3/bucket"
 
 	"github.com/coreos/go-semver/semver"
 	"github.com/stretchr/testify/assert"

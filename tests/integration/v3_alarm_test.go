@@ -16,12 +16,13 @@ package integration
 
 import (
 	"context"
-	"go.etcd.io/etcd/server/v3/embed"
 	"os"
 	"path/filepath"
 	"sync"
 	"testing"
 	"time"
+
+	"go.etcd.io/etcd/server/v3/embed"
 
 	"go.uber.org/zap/zaptest"
 

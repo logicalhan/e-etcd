@@ -18,10 +18,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"go.etcd.io/etcd/server/v3/bucket"
 	"math"
 	"sync"
 	"time"
+
+	"go.etcd.io/etcd/server/v3/bucket"
 
 	"go.etcd.io/etcd/api/v3/mvccpb"
 	"go.etcd.io/etcd/pkg/v3/schedule"

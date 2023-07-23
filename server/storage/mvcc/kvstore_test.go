@@ -20,7 +20,6 @@ import (
 	"crypto/rand"
 	"encoding/binary"
 	"fmt"
-	"go.etcd.io/etcd/server/v3/bucket"
 	"math"
 	mrand "math/rand"
 	"reflect"
@@ -30,7 +29,11 @@ import (
 	"testing"
 	"time"
 
+	"go.etcd.io/etcd/server/v3/bucket"
+
 	"go.uber.org/zap/zaptest"
+
+	"go.uber.org/zap"
 
 	"go.etcd.io/etcd/api/v3/mvccpb"
 	"go.etcd.io/etcd/client/pkg/v3/testutil"
@@ -39,7 +42,6 @@ import (
 	"go.etcd.io/etcd/server/v3/lease"
 	"go.etcd.io/etcd/server/v3/storage/backend"
 	betesting "go.etcd.io/etcd/server/v3/storage/backend/testing"
-	"go.uber.org/zap"
 )
 
 func TestStoreRev(t *testing.T) {

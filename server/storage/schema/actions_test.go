@@ -16,9 +16,10 @@ package schema
 
 import (
 	"fmt"
-	"go.etcd.io/etcd/server/v3/bucket"
 	"testing"
 	"time"
+
+	"go.etcd.io/etcd/server/v3/bucket"
 
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/zap/zaptest"
