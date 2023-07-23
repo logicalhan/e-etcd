@@ -22,7 +22,7 @@ jobs:
           TARGET: ${{ matrix.target }}
         run: |
           set -euo pipefail
-
+          sudo apt-get install gcc-multilib g++-multilib
           echo "${TARGET}"
           case "${TARGET}" in
             linux-amd64-grpcproxy-integration)

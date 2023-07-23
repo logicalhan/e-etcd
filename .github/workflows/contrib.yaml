@@ -14,5 +14,5 @@ jobs:
           go-version: ${{ steps.goversion.outputs.goversion }}
       - run: |
           set -euo pipefail
-
+        
           make -C contrib/mixin tools test

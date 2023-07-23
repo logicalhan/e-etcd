@@ -19,6 +19,7 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
+	"go.etcd.io/etcd/server/v3/bucket"
 	"hash/crc32"
 	"io"
 	"os"
@@ -334,7 +335,7 @@ func (s *v3Manager) saveDB() error {
 // modifyLatestRevision can increase the latest revision by the given amount and sets the scheduled compaction
 // to that revision so that the server will consider this revision compacted.
 func (s *v3Manager) modifyLatestRevision(bumpAmount uint64) error {
-	be := backend.NewDefaultBackend(s.lg, s.outDbPath())
+	be := backend.NewDefaultBackend(s.lg, s.outDbPath(), "bolt")
 	defer func() {
 		be.ForceCommit()
 		be.Close()
@@ -367,7 +368,7 @@ func (s *v3Manager) unsafeBumpRevision(tx backend.BatchTx, latest revision, amou
 	latest.sub = 0
 	k := make([]byte, 17)
 	revToBytes(k, latest)
-	tx.UnsafePut(schema.Key, k, []byte{})
+	tx.UnsafePut(bucket.Key, k, []byte{})
 
 	return latest
 }
@@ -383,7 +384,7 @@ func (s *v3Manager) unsafeMarkRevisionCompacted(tx backend.BatchTx, latest revis
 
 func (s *v3Manager) unsafeGetLatestRevision(tx backend.BatchTx) (revision, error) {
 	var latest revision
-	err := tx.UnsafeForEach(schema.Key, func(k, _ []byte) (err error) {
+	err := tx.UnsafeForEach(bucket.Key, func(k, _ []byte) (err error) {
 		rev := bytesToRev(k)
 
 		if rev.GreaterThan(latest) {

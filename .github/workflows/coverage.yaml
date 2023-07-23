@@ -20,6 +20,7 @@ jobs:
       - env:
           TARGET: ${{ matrix.target }}
         run: |
+          sudo apt-get install gcc-multilib g++-multilib
           mkdir "${TARGET}"
           case "${TARGET}" in
             linux-amd64-coverage)

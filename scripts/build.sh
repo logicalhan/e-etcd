@@ -5,7 +5,6 @@
 
 set -euo pipefail
 
-sudo apt-get install gcc-multilib g++-multilib
 source ./scripts/test_lib.sh
 source ./scripts/build_lib.sh
 
